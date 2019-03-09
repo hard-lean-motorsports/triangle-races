@@ -1,6 +1,6 @@
 function [gg, max_speed] = gg_gen()
     % gg_gen Generates speed dependant GG-diagram
-    % USAGE: gg = gg_gen() (no arguments yet)
+    % USAGE: [gg, max_speed] = gg_gen() (no arguments yet)
 
 
     %% Fundimental structure of the gg datastructure:
@@ -18,6 +18,7 @@ function [gg, max_speed] = gg_gen()
     w_dia = 13; % this is inches. sorry
     w_aspect = 55;
     w_section = 185; % (totally not the standard size for a Caterham)
+    w_compress = 1; % this is related to the estimated REAL diameter of the tyre, 1 * unloaded diameter to get the real diameter
 
 
     %% Aero factors
@@ -42,7 +43,11 @@ function [gg, max_speed] = gg_gen()
 
     
     %% Start of generation
+    % Everything in here should be meters, kg and newtons.
     speed = min_speed;
     gear = 1;
+    w_dia_total = (w_aspect / 100)*conv_unit(w_section, "mm", "m") + conv_unit(w_dia, "in", "m");
+    w_cir = pi * w_dia_total;
+    
 end
 
