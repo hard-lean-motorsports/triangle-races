@@ -60,31 +60,13 @@ function y = lin_interp(x_arr, y_arr, x, extrap)
             end
         end
     else
-        if(direction == 0)
-            for i=1:length(y_arr)
-                if(x_arr(i) > x)
-                    x1 = x_arr(i-1);
-                    y1 = y_arr(i-1);
-                    x2 = x_arr(i);
-                    y2 = y_arr(i);
-                    break
-                elseif(x_arr(i) == x)
-                    y = y_arr(i);
-                    return
-                end
-            end
-        else
-            for i=length(y_arr):1
-                if(x_arr(i) > x)
-                    x1 = x_arr(i+1);
-                    y1 = y_arr(i+1);
-                    x2 = x_arr(i);
-                    y2 = y_arr(i);
-                    break
-                elseif(x_arr(i) == x)
-                    y = y_arr(i);
-                    return
-                end
+        for i=1:(length(y_arr)-1)
+            x1 = x_arr(i);
+            y1 = y_arr(i);
+            x2 = x_arr(i+1);
+            y2 = y_arr(i+1);
+            if((x1-x) * (x2-x) < 0)
+                break
             end
         end
     end

@@ -82,14 +82,20 @@ function [gg, max_speed] = gg_gen()
             brake_accel = 0;
             if(i < 0)
                 t = acos(i/-max_lat_accel_right);
-                eng_accel = max_eng_accel * sin(t);
+                eng_accel = max_long_accel * sin(t);
+                if(eng_accel >= max_eng_accel)
+                    eng_accel = max_eng_accel;
+                end
                 brake_accel = -max_brake_accel * sin(t);
             elseif(i == 0)
                 eng_accel = max_eng_accel;
                 brake_accel = -max_brake_accel;
             else
                 t = acos(i/max_lat_accel_left);
-                eng_accel = max_eng_accel * sin(t);
+                eng_accel = max_long_accel * sin(t);
+                if(eng_accel >= max_eng_accel)
+                    eng_accel = max_eng_accel;
+                end
                 brake_accel = -max_brake_accel * sin(t);
             end
 
