@@ -106,6 +106,6 @@ function [gg, max_speed] = gg_gen()
 
         speed = speed + speed_step;
     end
-    max_speed = speed;
+    max_speed = speed-1;
 end
 
