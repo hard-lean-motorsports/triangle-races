@@ -34,11 +34,8 @@ function [torque_wheel, rpm, gear] = output_torque(torque_arr, gears, wheel_spee
         for i=1:length(gears)
             torque = 0;
             rpm = conv_unit(wheel_speed * gears(i), "rps", "rpm");
-            display(rpm);
             if(rpm < max_rpm)
                 torque = lin_interp(torque_arr(:,1), torque_arr(:,2), rpm);
-                display(torque);
-                display(gears(i));
                 torque = torque * gears(i);
                 
                 if(torque < 0)

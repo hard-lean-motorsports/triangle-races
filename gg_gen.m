@@ -70,7 +70,7 @@ function [gg, max_speed] = gg_gen()
         if(max_eng_accel > max_long_accel)
             max_eng_accel = max_long_accel;
         end
-        max_brake_accel = (W * mu * G) / W; % Obvious but will be changed
+        max_brake_accel = ((W * mu * G) + drag)/ W; % Obvious but will be changed
         max_lat_accel_right = (W * mu * G) / W; % Obvious but will be changed
         max_lat_accel_left = (W * mu * G) / W; % Obvious but will be changed
         g_steps_step = (max_lat_accel_left + max_lat_accel_right) / g_steps;
