@@ -12,6 +12,9 @@ function [gg, max_speed] = gg_gen()
     % gg_gen takes the definitions in this file and generates the gg structure,
     % no arguments are needed.
 
+    %% God factors
+    G = 9.80665; % damn son that's some __accurate__ G
+
     %% VD factors
     mu = 1.8; % simp for now 
     W = 180;
@@ -39,15 +42,64 @@ function [gg, max_speed] = gg_gen()
     %% Generation factors
     min_speed = 1; % m/s
     speed_step = 1;
-    g_step = .1;
-
+    g_steps = 20;
     
     %% Start of generation
     % Everything in here should be meters, kg and newtons.
     speed = min_speed;
-    gear = 1;
-    w_dia_total = (w_aspect / 100)*conv_unit(w_section, "mm", "m") + conv_unit(w_dia, "in", "m");
-    w_cir = pi * w_dia_total;
+    w_rad_total = ((w_aspect / 100)*conv_unit(w_section, "mm", "m") + conv_unit(w_dia, "in", "m")) / 2;
+    w_rad_total = w_rad_total * w_compress;
+    w_cir = w_rad_total * 2 * pi;
     
+    start = 0;
+    
+    while 1
+        w_rps = (speed / w_cir);
+        [w_torque, rpm, gear] = output_torque(torque, gears * final_drive, w_rps, cvt);
+        drag = .5 * cd * A * rho * (speed^2);
+        max_eng_accel = (((w_torque * trans_eff) / w_rad_total) - drag)/ W;
+        if(max_eng_accel <= 0)
+            if(start == 0)
+                speed = speed + speed_step;
+                continue
+            end
+            break
+        end
+        start = 1;
+        max_long_accel = (W * mu * G) / W; % Obvious but will be changed
+        if(max_eng_accel > max_long_accel)
+            max_eng_accel = max_long_accel;
+        end
+        max_brake_accel = (W * mu * G) / W; % Obvious but will be changed
+        max_lat_accel_right = (W * mu * G) / W; % Obvious but will be changed
+        max_lat_accel_left = (W * mu * G) / W; % Obvious but will be changed
+        g_steps_step = (max_lat_accel_left + max_lat_accel_right) / g_steps;
+        
+        this_gg = [];
+
+        for i=-max_lat_accel_right:g_steps_step:max_lat_accel_left
+            eng_accel = 0;
+            brake_accel = 0;
+            if(i < 0)
+                t = acos(i/-max_lat_accel_right);
+                eng_accel = max_eng_accel * sin(t);
+                brake_accel = -max_brake_accel * sin(t);
+            elseif(i == 0)
+                eng_accel = max_eng_accel;
+                brake_accel = -max_brake_accel;
+            else
+                t = acos(i/max_lat_accel_left);
+                eng_accel = max_eng_accel * sin(t);
+                brake_accel = -max_brake_accel * sin(t);
+            end
+
+            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear]];
+        end
+
+        gg{speed} = this_gg;
+
+        speed = speed + speed_step;
+    end
+    max_speed = speed;
 end
 

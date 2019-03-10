@@ -67,6 +67,7 @@ function y = lin_interp(x_arr, y_arr, x, extrap)
                     y1 = y_arr(i-1);
                     x2 = x_arr(i);
                     y2 = y_arr(i);
+                    break
                 elseif(x_arr(i) == x)
                     y = y_arr(i);
                     return
@@ -79,6 +80,7 @@ function y = lin_interp(x_arr, y_arr, x, extrap)
                     y1 = y_arr(i+1);
                     x2 = x_arr(i);
                     y2 = y_arr(i);
+                    break
                 elseif(x_arr(i) == x)
                     y = y_arr(i);
                     return
