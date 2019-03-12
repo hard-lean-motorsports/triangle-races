@@ -14,6 +14,7 @@ function [v, gg, max_speed, min_speed] = speed_radius(rad, gg_in, max_speed_in, 
     
     if(rad < 0) % asymmetric vehicles are wild
        max_dir = "-max";
+       rad = -rad;
     end
         
     if(~exist("min_speed_in", "var"))

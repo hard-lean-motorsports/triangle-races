@@ -1,6 +1,6 @@
-function [gg, max_speed] = gg_gen()
+function [gg, max_speed, min_speed] = gg_gen()
     % gg_gen Generates speed dependant GG-diagram
-    % USAGE: [gg, max_speed] = gg_gen() (no arguments yet)
+    % USAGE: [gg, max_speed, min_speed] = gg_gen() (no arguments yet)
 
 
     %% Fundimental structure of the gg datastructure:
@@ -16,7 +16,7 @@ function [gg, max_speed] = gg_gen()
     G = 9.80665; % damn son that's some __accurate__ G
 
     %% VD factors
-    mu = 1.8; % simp for now 
+    mu = .9; % simp for now 
     W = 180;
     w_dia = 13; % this is inches. sorry
     w_aspect = 55;
@@ -64,8 +64,11 @@ function [gg, max_speed] = gg_gen()
                 continue
             end
             break
+        else
+           if(start == 0)
+               start = speed;
+           end
         end
-        start = 1;
         max_long_accel = (W * mu * G) / W; % Obvious but will be changed
         if(max_eng_accel > max_long_accel)
             max_eng_accel = max_long_accel;
@@ -106,6 +109,7 @@ function [gg, max_speed] = gg_gen()
 
         speed = speed + speed_step;
     end
+    min_speed = start;
     max_speed = speed-1;
 end
 
