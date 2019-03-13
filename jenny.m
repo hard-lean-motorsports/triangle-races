@@ -1,3 +1,0 @@
-% producing power
-
-% dadadadadadadadadadadadada
