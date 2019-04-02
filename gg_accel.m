@@ -1,6 +1,6 @@
 function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, long_in, gg, max_speed)
     % gg_accel Returns speed dependant GG-diagram IMPORTANT: accelerations are in m/s^2
-    % USAGE: [lat, long, hybrid_p, gg] = gg_accel(speed, lat_in, long_in)
+    % USAGE: [lat, long, hybrid_p, gg] = gg_accel(speed, lat_in, long_in, gg, max_speed)
     % Any argument may be "max" or "-max" and a maximum of that argument is returned
     % Convention is +left, -right, +forward, -rearward
     % If long_in is used, lat_in must be be empty parameter ([]) and
@@ -22,6 +22,7 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
         gg_out = gg;
         return
     end
+   
     
     req = 0; %lat
     
@@ -66,6 +67,12 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
     elseif(num2str(long_in) == "-max")
         long = Y_low_min(3) * low_vel_mult + Y_high_min(3) * high_vel_mult;
         lat = 0;
+    elseif(lat_in == 0)
+        long = [Y_low_max(2) * low_vel_mult + Y_high_max(2) * high_vel_mult, Y_low_min(3) * low_vel_mult + Y_high_min(3) * high_vel_mult];
+        lat = 0;
+    elseif(long_in == 0)
+        lat = [Y_low_max(1) * low_vel_mult + Y_high_max(1) * high_vel_mult, Y_low_min(1) * low_vel_mult + Y_high_min(1) * high_vel_mult];
+        long = 0;
     else
         if(req == 0)
             high_lat = lat_in;

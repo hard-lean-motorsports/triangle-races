@@ -1,68 +1,142 @@
 clear
 sector_list = track_gen();
-max_corner_speeds = [];
-corner_speeds = zeros(length(sector_list), 1);
 [gg, max_speed, min_speed] = gg_gen();
-times = [];
+for i=1:length(gg)
+    if(~isempty(gg{i}))
+        min_speed = i;
+        break
+    end
+end
+
+min_rad = min(sector_list(:,1));
+slowest_index = find(sector_list(:,1)==min_rad);
+sectors_length = length(sector_list);
+max_corner_speeds = zeros(sectors_length, 1);
+entry_corner_speeds = zeros(sectors_length, 1);
+exit_corner_speeds = zeros(sectors_length, 1);
+phases = cell(sectors_length, 1);
+
 for i=1:length(sector_list)
-    max_corner_speeds = [max_corner_speeds; speed_radius(sector_list(i, 1), gg, max_speed, min_speed)];
+    max_corner_speeds(i) = speed_radius(sector_list(i, 1), gg, max_speed, min_speed);
+    phases{i} = zeros(floor(sector_list(i, 2)), 3);
 end
 
-slowest_corners = [];
-slowest_speed = min(max_corner_speeds);
-entry_speeds = zeros(length(sector_list), 1);
-exit_speeds = zeros(length(sector_list), 1);
-for i=1:length(max_corner_speeds)
-    [prev, next] = ring_index(i, length(max_corner_speeds));
-    if(abs(max_corner_speeds(i)) == abs(slowest_speed))
-        slowest_corners = [slowest_corners; i];
-        corner_speeds(i) = max_corner_speeds(i);
-        entry_speeds(next) = max_corner_speeds(i);
-        entry_speeds(i) = max_corner_speeds(i);
-        exit_speeds(prev) = max_corner_speeds(i);
-        exit_speeds(i) = max_corner_speeds(i);
-    end
+for i=1:length(slowest_index)
+    [prev, next] = ring_index(slowest_index(i), sectors_length);
+    exit_corner_speeds(prev) = max_corner_speeds(slowest_index(i));
+    entry_corner_speeds(slowest_index(i)) = max_corner_speeds(slowest_index(i));
+    exit_corner_speeds(slowest_index(i)) = max_corner_speeds(slowest_index(i));
+    entry_corner_speeds(next) = max_corner_speeds(slowest_index(i));
+    
+    phases{slowest_index(i)} = ones(floor(sector_list(slowest_index(i), 2)), 3) * max_corner_speeds(slowest_index(i));
+    
 end
 
-complete_corners = slowest_corners;
-
-while length(complete_corners) < length(max_corner_speeds)
-    current_corners = [];
-    for i=1:length(complete_corners)
-        [prev, next] = ring_index(complete_corners(i), length(max_corner_speeds));
-        if(isempty(find(complete_corners == prev)) && isempty(find(current_corners == prev)))
-            current_corners = [current_corners; prev];
-        end
-        if(isempty(find(complete_corners == next)) && isempty(find(current_corners == next)))
-            current_corners = [current_corners; next];
-        end
+complete_corners = slowest_index;
+curr_corners = [];
+for i=1:length(complete_corners)
+    [prev, next] = ring_index(complete_corners(i), sectors_length);
+    selected_corners = [];
+    if(~ismember(prev, complete_corners) && prev ~= next)
+        selected_corners = [selected_corners; prev];
     end
-    for i=1:length(current_corners)
-        [prev, next] = ring_index(current_corners(i), length(max_corner_speeds));
-        if(exit_speeds(current_corners(i)) > 0)
-            exit_speed = exit_speeds(current_corners(i));
-            corner_speeds(current_corners(i)) = exit_speed;
-            max_speed = max_corner_speeds(current_corners(i));
+    if(~ismember(next, complete_corners))
+        selected_corners = [selected_corners; next];
+    end
+    curr_corners = [curr_corners; selected_corners];
+end
+
+while ~isempty(curr_corners)
+    for i=1:length(curr_corners)
+        curr_corner = curr_corners(i);
+        curr_corner_rad = sector_list(curr_corner, 1);
+        [prev, next] = ring_index(curr_corner, sectors_length);
+        max_corner_speed = max_corner_speeds(curr_corner);
+        max_exit_speed = max_corner_speed;
+        max_entry_speed = max_corner_speed;
+        entry_speed_set = 0;
+        exit_speed_set = 0;
+        
+        if(entry_corner_speeds(curr_corner) > 0)
+            max_entry_speed = entry_corner_speeds(curr_corner);
+            phases{curr_corner}(1, 2) = entry_corner_speeds(curr_corner);
+            entry_speed_set = 1;
+        end
+        
+        if(exit_corner_speeds(curr_corner) > 0)
+            max_exit_speed = exit_corner_speeds(curr_corner);
+            phases{curr_corner}(end, 3) = exit_corner_speeds(curr_corner);
+            exit_speed_set = 1;
+        end
+        
+        if(max_corner_speeds(next) < max_exit_speed)
+            max_exit_speed = max_corner_speeds(next);
+        end
+        if(max_corner_speeds(prev) < max_entry_speed)
             max_entry_speed = max_corner_speeds(prev);
-            radius = sector_list(current_corners(i), 1);
-            [~, max_long] = gg_accel(exit_speeds(current_corners(i)), (exit_speed^2)/radius, [], gg, max_speed);
-            end_accel = 0;
-            if(exit_speed > max_entry_speed)
-                end_accel = max(max_long);
-            elseif(exit_speed < max_entry_speed)
-                end_accel = min(max_long);
+        end
+        
+        
+        if(entry_speed_set)
+            for z=1:length(phases{curr_corner})
+                phase_entry_speed = phases{curr_corner}(z, 2);
+                cir_accel = (phase_entry_speed^2) / curr_corner_rad;
+                [lat, long] = gg_accel(phase_entry_speed, cir_accel, [], gg, max_speed);
+                phase_exit_speed = sqrt(2*long(1) + phase_entry_speed^2) + phase_entry_speed;
+                if(phase_exit_speed > min(max_corner_speed, max_exit_speed))
+                    phase_exit_speed = min(max_corner_speed, max_exit_speed);
+                end
+                phases{curr_corner}(z, 3) = phase_exit_speed;
+                if(z < length(phases{curr_corner}))
+                    phases{curr_corner}(z+1, 2) = phase_exit_speed;
+                end
             end
-            entry_speeds(current_corners(i)) = exit_speed;
-        elseif(entry_speeds(current_corners(i)) > 0)
-            entry_speed = entry_speeds(current_corners(i));
-            corner_speeds(current_corners(i)) = entry_speed;
-            exit_speeds(current_corners(i)) = entry_speed;
-        else
-            corner_speeds(current_corners(i)) = max_corner_speeds(current_corners(i));
+        elseif(exit_speed_set)
+           for z=length(phases{curr_corner}):-1:1
+                phase_exit_speed = phases{curr_corner}(z, 3);
+                cir_accel = (phase_exit_speed^2) / curr_corner_rad;
+                [lat, long] = gg_accel(phase_exit_speed, cir_accel, [], gg, max_speed);
+                phase_entry_speed = phase_exit_speed + sqrt(2*long(2) + phase_exit_speed^2);
+                if(phase_entry_speed > min(max_corner_speed, max_entry_speed))
+                    phase_entry_speed = min(max_corner_speed, max_entry_speed);
+                end
+                phases{curr_corner}(z, 2) = phase_entry_speed;
+                if(z > 1)
+                    phases{curr_corner}(z-1, 3) = phase_entry_speed;
+                end
+            end
+        end
+        entry_corner_speeds(curr_corner) = phases{curr_corner}(1, 2);
+        exit_corner_speeds(prev) = entry_corner_speeds(curr_corner);
+        exit_corner_speeds(curr_corner) = phases{curr_corner}(end, 3);
+        entry_corner_speeds(next) = exit_corner_speeds(curr_corner);
+
+        for z=1:length(phases{curr_corner})
+            phases{curr_corner}(z,1) = (phases{curr_corner}(z, 2) + phases{curr_corner}(z, 3)) / 2;
         end
     end
-    complete_corners = [complete_corners; current_corners];
+    
+    complete_corners = [complete_corners; curr_corners];
+    curr_corners = [];
+    for i=1:length(complete_corners)
+        [prev, next] = ring_index(complete_corners(i), sectors_length);
+        if(~ismember(prev, complete_corners) && ~ismember(prev, curr_corners))
+            curr_corners = [curr_corners; prev];
+        end
+        if(~ismember(next, complete_corners) && ~ismember(next, curr_corners))
+            curr_corners = [curr_corners; next];
+        end
+    end
 end
 
-times = sector_list(:,2) ./ corner_speeds;
+times = zeros(length(phases), 1);
+
+for i=1:length(times)
+    extra_length = sector_list(i, 2) - size(phases{i},1);
+    times(i) = extra_length/(2*entry_corner_speeds(i)) + extra_length/(2*exit_corner_speeds(i));
+    for j=1:size(phases{i}, 1)
+        times(i) = times(i) + 1/phases{i}(j, 1);
+    end
+end
+
 total_time = sum(times);
