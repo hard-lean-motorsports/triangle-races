@@ -1,3 +1,5 @@
+%% Main program. Run this.
+
 clear
 sector_list = track_gen();
 [gg, max_speed, min_speed] = gg_gen();
@@ -8,12 +10,19 @@ for i=1:length(gg)
     end
 end
 
-min_rad = min(sector_list(:,1));
+min_rad = Inf;
+for i=1:length(sector_list(:,1))
+    if(abs(sector_list(i,1)) < abs(min_rad))
+        min_rad = sector_list(i,1);
+    end
+end
 slowest_index = find(sector_list(:,1)==min_rad);
 sectors_length = length(sector_list);
 max_corner_speeds = zeros(sectors_length, 1);
 entry_corner_speeds = zeros(sectors_length, 1);
 exit_corner_speeds = zeros(sectors_length, 1);
+eplison = .0001;
+phase_dist = 1;
 phases = cell(sectors_length, 1);
 
 for i=1:length(sector_list)
@@ -75,37 +84,49 @@ while ~isempty(curr_corners)
         if(max_corner_speeds(prev) < max_entry_speed)
             max_entry_speed = max_corner_speeds(prev);
         end
+       
+        exit_phases = 0;
+        max_phases_speed = max_corner_speed;
+        if(phases{curr_corner}(end, 3) == 0)
+            phases{curr_corner}(end, 3) = max_exit_speed;
+        end
+        if(phases{curr_corner}(1, 2) == 0)
+            phases{curr_corner}(1, 2) = max_entry_speed;
+        end
         
-        
-        if(entry_speed_set)
-            for z=1:length(phases{curr_corner})
-                phase_entry_speed = phases{curr_corner}(z, 2);
-                cir_accel = (phase_entry_speed^2) / curr_corner_rad;
-                [lat, long] = gg_accel(phase_entry_speed, cir_accel, [], gg, max_speed);
-                phase_exit_speed = sqrt(2*long(1) + phase_entry_speed^2) + phase_entry_speed;
-                if(phase_exit_speed > min(max_corner_speed, max_exit_speed))
-                    phase_exit_speed = min(max_corner_speed, max_exit_speed);
-                end
-                phases{curr_corner}(z, 3) = phase_exit_speed;
-                if(z < length(phases{curr_corner}))
-                    phases{curr_corner}(z+1, 2) = phase_exit_speed;
-                end
-            end
-        elseif(exit_speed_set)
-           for z=length(phases{curr_corner}):-1:1
-                phase_exit_speed = phases{curr_corner}(z, 3);
-                cir_accel = (phase_exit_speed^2) / curr_corner_rad;
-                [lat, long] = gg_accel(phase_exit_speed, cir_accel, [], gg, max_speed);
-                phase_entry_speed = phase_exit_speed + sqrt(2*long(2) + phase_exit_speed^2);
-                if(phase_entry_speed > min(max_corner_speed, max_entry_speed))
-                    phase_entry_speed = min(max_corner_speed, max_entry_speed);
-                end
-                phases{curr_corner}(z, 2) = phase_entry_speed;
-                if(z > 1)
-                    phases{curr_corner}(z-1, 3) = phase_entry_speed;
-                end
+        if(max_exit_speed < max_corner_speed)
+            for z=length(phases{curr_corner}):-1:1
+               phase_exit_speed = phases{curr_corner}(z, 3);
+               long = avail_accel(phase_exit_speed, sector_list(curr_corner, 1), gg, max_speed);
+               brake_accel = long(2);
+               time = phase_time(brake_accel, phase_exit_speed, phase_dist);
+               phase_entry_speed = -brake_accel * time + phase_exit_speed;
+               if(max_corner_speed - phase_entry_speed < eplison)
+                   break
+               end
+               max_phases_speed = phase_entry_speed;
+               phases{curr_corner}(z, 2) = phase_entry_speed;
+               if(z > 1)
+                   phases{curr_corner}(z-1, 3) = phase_entry_speed;
+               end
+               exit_phases = exit_phases + 1;
             end
         end
+        for z=1:(length(phases{curr_corner})-exit_phases)
+            phase_entry_speed = phases{curr_corner}(z, 2);
+            long = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg, max_speed);
+            engine_accel = long(1);
+            time = phase_time(engine_accel, phase_entry_speed, phase_dist);
+            phase_exit_speed = engine_accel * time + phase_entry_speed;
+            if(max_phases_speed - phase_exit_speed < eplison)
+                phase_exit_speed = max_phases_speed;
+            end
+            phases{curr_corner}(z, 3) = phase_exit_speed;
+            if(z < length(phases{curr_corner}))
+                phases{curr_corner}(z+1, 2) = phase_exit_speed;
+            end
+        end
+        
         entry_corner_speeds(curr_corner) = phases{curr_corner}(1, 2);
         exit_corner_speeds(prev) = entry_corner_speeds(curr_corner);
         exit_corner_speeds(curr_corner) = phases{curr_corner}(end, 3);

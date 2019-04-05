@@ -84,7 +84,7 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
                     error("gg_accel: Error: lat_in above vehicle capability");
                 end
             elseif(high_lat < Y_high_min(1))
-                high_lat = Y_high_max(1);
+                high_lat = Y_high_min(1);
                 low_lat = (lat_in / low_vel_mult) - ((high_lat * high_vel_mult) / low_vel_mult);
                 if(low_lat < Y_low_min(1))
                     error("gg_accel: Error: lat_in above vehicle capability");
@@ -118,7 +118,7 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
                     error("gg_accel: Error: long_in above vehicle capability");
                 end
             elseif(high_long < Y_high_min(3))
-                high_long = Y_high_max(3);
+                high_long = Y_high_min(3);
                 low_long = (long_in / low_vel_mult) - ((high_long * high_vel_mult) / low_vel_mult);
                 if(low_long < Y_low_min(3))
                     error("gg_accel: Error: long_in above vehicle capability");

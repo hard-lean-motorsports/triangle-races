@@ -16,7 +16,7 @@ function [v, gg, max_speed, min_speed] = speed_radius(rad, gg_in, max_speed_in, 
        max_dir = "-max";
        rad = -rad;
     end
-        
+    
     if(~exist("min_speed_in", "var"))
         for i=1:max_speed
             if(~isempty(gg{i}))
@@ -32,6 +32,9 @@ function [v, gg, max_speed, min_speed] = speed_radius(rad, gg_in, max_speed_in, 
     
     for i=min_speed:step:max_speed
         lat_accel = gg_accel(i, max_dir, [], gg, max_speed);
+        if(max_dir == "-max")
+            lat_accel = -lat_accel;
+        end
         if(sqrt(lat_accel*rad) >= i)
             v = i;
         end
