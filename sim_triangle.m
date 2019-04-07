@@ -1,6 +1,6 @@
 %% Main program. Run this.
 
-clear
+clear variables
 sector_list = track_gen();
 [gg, max_speed, min_speed] = gg_gen();
 for i=1:length(gg)

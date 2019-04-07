@@ -16,7 +16,9 @@ function [gg, max_speed, min_speed] = gg_gen()
     G = 9.80665; % damn son that's some __accurate__ G
 
     %% VD factors
-    mu = .9; % simp for now 
+    lat_g_mult = 1.0
+    long_g_mult = 1.0
+    mu = 1.2; % simp for now 
     W = 180;
     w_dia = 13; % this is inches. sorry
     w_aspect = 55;
@@ -25,8 +27,9 @@ function [gg, max_speed, min_speed] = gg_gen()
 
 
     %% Aero factors
+    aero_decrease_mult = 1.0
     rho = 1.2; 
-    cd = .3;
+    cd = .3 / aero_decrease_mult;
     A = 1.2;
 
     %% Powertrain factors
@@ -35,6 +38,8 @@ function [gg, max_speed, min_speed] = gg_gen()
     gears = [2.929, 2.056, 1.619, 1.333, 1.154, 1.037]; % stole from Ninja 400
     cvt = 0; % in an spooky voice: _latterrrr_
     trans_eff = .9;
+    torque_test_mult = 1.0
+    
 
     %% Hybrid factors
     hybrid = 0; %fak off
@@ -57,7 +62,7 @@ function [gg, max_speed, min_speed] = gg_gen()
         w_rps = (speed / w_cir);
         [w_torque, rpm, gear] = output_torque(torque, gears * final_drive, w_rps, cvt);
         drag = .5 * cd * A * rho * (speed^2);
-        max_eng_accel = (((w_torque * trans_eff) / w_rad_total) - drag)/ W;
+        max_eng_accel = (((w_torque * torque_test_mult * trans_eff) / w_rad_total) - drag)/ W;
         if(max_eng_accel <= 0)
             if(start == 0)
                 speed = speed + speed_step;
@@ -69,13 +74,13 @@ function [gg, max_speed, min_speed] = gg_gen()
                start = speed;
            end
         end
-        max_long_accel = (W * mu * G) / W; % Obvious but will be changed
+        max_long_accel = (W * mu * long_g_mult * G) / W; % Obvious but will be changed
         if(max_eng_accel > max_long_accel)
             max_eng_accel = max_long_accel;
         end
-        max_brake_accel = ((W * mu * G) + drag)/ W; % Obvious but will be changed
-        max_lat_accel_right = (W * mu * G) / W; % Obvious but will be changed
-        max_lat_accel_left = (W * mu * G) / W; % Obvious but will be changed
+        max_brake_accel = ((W * mu * long_g_mult * G) + drag)/ W; % Obvious but will be changed
+        max_lat_accel_right = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
+        max_lat_accel_left = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
         g_steps_step = (max_lat_accel_left + max_lat_accel_right) / g_steps;
         
         this_gg = [];
