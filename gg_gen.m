@@ -1,4 +1,4 @@
-function [gg, max_speed, min_speed] = gg_gen()
+function [gg, max_speed, min_speed] = gg_gen(engine_file)
     % gg_gen Generates speed dependant GG-diagram
     % USAGE: [gg, max_speed, min_speed] = gg_gen() (no arguments yet)
 
@@ -14,7 +14,8 @@ function [gg, max_speed, min_speed] = gg_gen()
 
     %% God factors
     G = 9.80665; % damn son that's some __accurate__ G
-
+    epsilon = 1e-5;
+    
     %% VD factors
     lat_g_mult = 1.0
     long_g_mult = 1.0
@@ -33,7 +34,7 @@ function [gg, max_speed, min_speed] = gg_gen()
     A = 1.2;
 
     %% Powertrain factors
-    torque = engine_gen();
+    torque = engine_gen(engine_file);
     final_drive = 2.219 * 2.929; % almost all bikes have two reductions
     gears = [2.929, 2.056, 1.619, 1.333, 1.154, 1.037]; % stole from Ninja 400
     cvt = 0; % in an spooky voice: _latterrrr_
@@ -45,8 +46,8 @@ function [gg, max_speed, min_speed] = gg_gen()
     hybrid = 0; %fak off
 
     %% Generation factors
-    min_speed = 1; % m/s
-    speed_step = 1;
+    speed_step = .001;
+    min_speed = speed_step; % m/s
     g_steps = 20;
     
     %% Start of generation
@@ -89,32 +90,45 @@ function [gg, max_speed, min_speed] = gg_gen()
             eng_accel = 0;
             brake_accel = 0;
             if(i < 0)
-                t = acos(i/-max_lat_accel_right);
-                eng_accel = max_long_accel * sin(t);
+                t = real(acos(i/-max_lat_accel_right));
+                eng_accel = real(max_long_accel * sin(t));
                 if(eng_accel >= max_eng_accel)
                     eng_accel = max_eng_accel;
                 end
-                brake_accel = -max_brake_accel * sin(t);
+                brake_accel = real(-max_brake_accel * sin(t));
             elseif(i == 0)
                 eng_accel = max_eng_accel;
                 brake_accel = -max_brake_accel;
             else
-                t = acos(i/max_lat_accel_left);
-                eng_accel = max_long_accel * sin(t);
+                t = real(acos(i/max_lat_accel_left));
+                eng_accel = real(max_long_accel * sin(t));
                 if(eng_accel >= max_eng_accel)
                     eng_accel = max_eng_accel;
                 end
                 brake_accel = -max_brake_accel * sin(t);
             end
 
+            if(eng_accel < epsilon)
+                eng_accel = 0;
+            end
+            if(abs(brake_accel) < epsilon)
+                brake_accel = 0;
+            end
+            if(abs(i) < epsilon)
+                i = 0;
+            end
+            
             this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear]];
         end
-
-        gg{speed} = this_gg;
+        index = round(speed / speed_step);
+        gg{index} = this_gg;
 
         speed = speed + speed_step;
     end
     min_speed = start;
-    max_speed = speed-1;
+    max_speed = speed-speed_step;
+    gg{1} = speed_step;
 end
+
+
 

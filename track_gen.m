@@ -1,10 +1,7 @@
-function [sector_list, xy_list] = track_gen()
+function [sector_list, xy_list] = track_gen(track_file)
     % track_gen Generates list of sectors in the form [radius, arc_length]
     % No arguments are yet needed, select the CSV when prompted.
     % No width yet.
-    h = msgbox("Choose a track coordinant csv file");
-    uiwait(h);
-    track_file = uigetfile('*.csv');
     xy_list = csvread(track_file);
     list_length = size(xy_list);
     list_length = list_length(1);

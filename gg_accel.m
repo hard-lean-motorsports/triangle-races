@@ -13,7 +13,7 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
         [gg, max_speed] = gg_gen();
     end
     max_speed_out = max_speed;
-
+    speed_step = gg{1};
     gg_out = gg;
     
     if(vel > max_speed)
@@ -36,8 +36,8 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
         end
     end
     
-    low_vel = floor(vel);
-    high_vel = ceil(vel);
+    low_vel = floor(vel/speed_step) * speed_step;
+    high_vel = ceil(vel/speed_step) * speed_step;
    
     high_vel_mult = .5;
     
@@ -47,8 +47,10 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
     
     low_vel_mult = 1 - high_vel_mult;
     
-    gg_low = gg{low_vel};
-    gg_high = gg{high_vel};
+    low_vel_index = round(low_vel / speed_step);
+    gg_low = gg{low_vel_index};
+    high_vel_index = round(high_vel / speed_step);
+    gg_high = gg{high_vel_index};
     
     [Y_low_max, I_low_max] = max(gg_low);
     [Y_high_max, I_high_max] = max(gg_high);

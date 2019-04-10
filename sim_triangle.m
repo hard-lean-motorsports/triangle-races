@@ -1,14 +1,14 @@
 %% Main program. Run this.
 
 clear variables
-sector_list = track_gen();
-[gg, max_speed, min_speed] = gg_gen();
-for i=1:length(gg)
-    if(~isempty(gg{i}))
-        min_speed = i;
-        break
-    end
-end
+h = msgbox("Choose a track coordinant csv file");
+uiwait(h);
+track_file = uigetfile('*.csv');
+sector_list = track_gen(track_file);
+h = msgbox("Choose a torque curve csv file");
+uiwait(h);
+engine_file = uigetfile('*.csv');
+[gg, max_speed, min_speed] = gg_gen(engine_file);
 
 min_rad = Inf;
 for i=1:length(sector_list(:,1))
@@ -21,13 +21,19 @@ sectors_length = length(sector_list);
 max_corner_speeds = zeros(sectors_length, 1);
 entry_corner_speeds = zeros(sectors_length, 1);
 exit_corner_speeds = zeros(sectors_length, 1);
-eplison = .0001;
+epsilon = .0001;
 phase_dist = 1;
 phases = cell(sectors_length, 1);
 
+p = gcp();
 for i=1:length(sector_list)
-    max_corner_speeds(i) = speed_radius(sector_list(i, 1), gg, max_speed, min_speed);
-    phases{i} = zeros(floor(sector_list(i, 2)), 3);
+    async_result(i) = parfeval(p, @speed_radius, 1, sector_list(i, 1), gg, max_speed, min_speed);
+end
+
+for i=1:length(sector_list)
+    [real_index, result_speed] = fetchNext(async_result);
+    max_corner_speeds(real_index) = result_speed;
+    phases{real_index} = zeros(floor(sector_list(real_index, 2)), 3);
 end
 
 for i=1:length(slowest_index)
@@ -67,7 +73,7 @@ while ~isempty(curr_corners)
         exit_speed_set = 0;
         
         if(entry_corner_speeds(curr_corner) > 0)
-            max_entry_speed = entry_corner_speeds(curr_corner);
+            max_entry_speed = entry_corner_speeds(curr_corner)-epsilon;
             phases{curr_corner}(1, 2) = entry_corner_speeds(curr_corner);
             entry_speed_set = 1;
         end
@@ -95,13 +101,14 @@ while ~isempty(curr_corners)
         end
         
         if(max_exit_speed < max_corner_speed)
+            exit_phases = 1;
             for z=length(phases{curr_corner}):-1:1
                phase_exit_speed = phases{curr_corner}(z, 3);
                long = avail_accel(phase_exit_speed, sector_list(curr_corner, 1), gg, max_speed);
                brake_accel = long(2);
                time = phase_time(brake_accel, phase_exit_speed, phase_dist);
                phase_entry_speed = -brake_accel * time + phase_exit_speed;
-               if(max_corner_speed - phase_entry_speed < eplison)
+               if(max_corner_speed - phase_entry_speed < epsilon)
                    break
                end
                max_phases_speed = phase_entry_speed;
@@ -118,7 +125,7 @@ while ~isempty(curr_corners)
             engine_accel = long(1);
             time = phase_time(engine_accel, phase_entry_speed, phase_dist);
             phase_exit_speed = engine_accel * time + phase_entry_speed;
-            if(max_phases_speed - phase_exit_speed < eplison)
+            if(max_phases_speed - phase_exit_speed < epsilon)
                 phase_exit_speed = max_phases_speed;
             end
             phases{curr_corner}(z, 3) = phase_exit_speed;
