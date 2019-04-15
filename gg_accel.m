@@ -1,13 +1,13 @@
-function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, long_in, gg, max_speed)
+function [lat, long, energy, throttlebrake, gg_out, max_speed_out] = gg_accel(vel, lat_in, long_in, gg, max_speed)
     % gg_accel Returns speed dependant GG-diagram IMPORTANT: accelerations are in m/s^2
-    % USAGE: [lat, long, hybrid_p, gg] = gg_accel(speed, lat_in, long_in, gg, max_speed)
+    % USAGE: [lat, long, energy, throttle, gg, max_speed_out] = gg_accel(speed, lat_in, long_in, gg, max_speed)
     % Any argument may be "max" or "-max" and a maximum of that argument is returned
     % Convention is +left, -right, +forward, -rearward
     % If long_in is used, lat_in must be be empty parameter ([]) and
     % likewise if lat_in is used the long_in must be the empty parameter
     % (or skipped).
 
-    hybrid_p = 0;
+    energy = 0;
     
     if(~exist("gg", "var") || ~exist("max_speed", "var"))
         [gg, max_speed] = gg_gen();
@@ -57,24 +57,33 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
     [Y_low_min, I_low_min] = min(gg_low);
     [Y_high_min, I_high_min] = min(gg_high);
     
+    max_throttle = Y_low_max(2) * low_vel_mult + Y_high_max(2) * high_vel_mult;
+    max_brake = Y_low_min(3) * low_vel_mult + Y_high_min(3) * high_vel_mult;
+    
     if(num2str(lat_in) == "max")
         lat = Y_low_max(1) * low_vel_mult + Y_high_max(1) * high_vel_mult;
         long = 0;
+        throttlebrake = [0, 0];
     elseif(num2str(lat_in) == "-max")
         lat = Y_low_min(1) * low_vel_mult + Y_high_min(1) * high_vel_mult;
         long = 0;
+        throttlebrake = [0, 0];
     elseif(num2str(long_in) == "max")
         long = Y_low_max(2) * low_vel_mult + Y_high_max(2) * high_vel_mult;
         lat = 0;
+        throttlebrake = [1, 0];
     elseif(num2str(long_in) == "-max")
         long = Y_low_min(3) * low_vel_mult + Y_high_min(3) * high_vel_mult;
+        throttlebrake = [0, 1];
         lat = 0;
     elseif(lat_in == 0)
         long = [Y_low_max(2) * low_vel_mult + Y_high_max(2) * high_vel_mult, Y_low_min(3) * low_vel_mult + Y_high_min(3) * high_vel_mult];
         lat = 0;
+        throttlebrake = [1, 1];
     elseif(long_in == 0)
         lat = [Y_low_max(1) * low_vel_mult + Y_high_max(1) * high_vel_mult, Y_low_min(1) * low_vel_mult + Y_high_min(1) * high_vel_mult];
         long = 0;
+        throttlebrake = [0, 0];
     else
         if(req == 0)
             high_lat = lat_in;
@@ -110,6 +119,7 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
             long_high_r = lin_interp(gg_high(:,1), gg_high(:,3), high_lat, 0);
             lat = lat_in;
             long = [long_high_f * high_vel_mult + long_low_f * low_vel_mult, long_high_r * high_vel_mult + long_low_r * low_vel_mult];
+            throttlebrake = [long(1)/max_throttle, long(2)/max_brake];
         else
             high_long = long_in;
             low_long = long_in;
@@ -165,6 +175,7 @@ function [lat, long, hybrid_p, gg_out, max_speed_out] = gg_accel(vel, lat_in, lo
             lat_high_r = lin_interp(x_arr_high_r, y_arr_high_r, high_long, 0);
             long = long_in;
             lat = [lat_high_l * high_vel_mult + lat_low_l * low_vel_mult, lat_high_r * high_vel_mult + lat_low_r * low_vel_mult];
+            throttlebrake = [long/max_throttle, 0];
         end
     end
 end

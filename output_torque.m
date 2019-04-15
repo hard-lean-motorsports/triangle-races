@@ -1,4 +1,4 @@
-function [torque_wheel, rpm, gear] = output_torque(torque_arr, gears, wheel_speed, cvt, cvt_steps)
+function [torque_wheel, rpm, gear, consump] = output_torque(torque_arr, gears, wheel_speed, cvt, cvt_steps)
     % output_torque This function handles gear selection and outputs the torque at the wheel assuming 100 eff
     % It also returns the RPM of the motor and the gear selected for
     % accouting purposes.
@@ -28,14 +28,18 @@ function [torque_wheel, rpm, gear] = output_torque(torque_arr, gears, wheel_spee
     max_rpm = max(torque_arr(:,1));
     
     if(cvt == 0)
-        torques = zeros(length(gears), 3);
+        torques = zeros(length(gears), 4);
         max_torque = -1;
         max_torque_ele = 0;
+        fcps = 0;
         for i=1:length(gears)
             torque = 0;
             rpm = conv_unit(wheel_speed * gears(i), "rps", "rpm");
             if(rpm < max_rpm)
                 torque = lin_interp(torque_arr(:,1), torque_arr(:,2), rpm);
+                bsfc = lin_interp(torque_arr(:,1), torque_arr(:,3), rpm);
+                power = (torque * conv_unit(rpm, "rpm", "rad/s")) / 1000;
+                fcps = (bsfc * power) / 3600;
                 torque = torque * gears(i);
                 
                 if(torque < 0)
@@ -46,12 +50,13 @@ function [torque_wheel, rpm, gear] = output_torque(torque_arr, gears, wheel_spee
                 max_torque = torque;
                 max_torque_ele = i;
             end
-            torques(i,:) = [torque, rpm, i];
+            torques(i,:) = [torque, rpm, i, fcps];
             
         end
         torque_wheel = torques(max_torque_ele,1);
         rpm = torques(max_torque_ele,2);
         gear = torques(max_torque_ele,3);
+        consump = torques(max_torque_ele,4);
     else
         gear_step = (gears(2) - gears(1)) / cvt_steps;
         torques = zeros(cvt_step);
@@ -63,14 +68,18 @@ function [torque_wheel, rpm, gear] = output_torque(torque_arr, gears, wheel_spee
             range_gear = 0/cvt_steps;
             rpm = conv_unit(wheel_speed * gear_ratio, "rps", "rpm");
             if(rpm < max_rpm)
-                torque = lin_interp(torque_arr(:,1), torque_arr(:,2), rpm) * gear_ratio;
+                torque = lin_interp(torque_arr(:,1), torque_arr(:,2), rpm);
+                bsfc = lin_interp(torque_arr(:,1), torque_arr(:,3), rpm);
+                power = (torque * conv_unit(rpm, "rpm", "rad/s")) / 1000;
+                torque = torque * gear_ratio;
+                fcps = (bsfc * power) / 3600;
             end
             if(torque >= max_torque)
                 max_torque = torque;
                 max_torque_ele = i;
             end
-            torques(i) = [torque, rpm, range_gear];
+            torques(i) = [torque, rpm, range_gear, fcps];
         end
-        [torque_wheel, rpm, gear] = torques(max_torque_ele);
+        [torque_wheel, rpm, gear, consump] = torques(max_torque_ele);
     end
 end

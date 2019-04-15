@@ -17,9 +17,9 @@ function [gg, max_speed, min_speed] = gg_gen(engine_file)
     epsilon = 1e-5;
     
     %% VD factors
-    lat_g_mult = 1.0
-    long_g_mult = 1.0
-    mu = 1.2; % simp for now 
+    lat_g_mult = 1.0;
+    long_g_mult = 1.0;
+    mu = 1; % simp for now 
     W = 180;
     w_dia = 13; % this is inches. sorry
     w_aspect = 55;
@@ -28,7 +28,7 @@ function [gg, max_speed, min_speed] = gg_gen(engine_file)
 
 
     %% Aero factors
-    aero_decrease_mult = 1.0
+    aero_decrease_mult = 1.0;
     rho = 1.2; 
     cd = .3 / aero_decrease_mult;
     A = 1.2;
@@ -39,7 +39,7 @@ function [gg, max_speed, min_speed] = gg_gen(engine_file)
     gears = [2.929, 2.056, 1.619, 1.333, 1.154, 1.037]; % stole from Ninja 400
     cvt = 0; % in an spooky voice: _latterrrr_
     trans_eff = .9;
-    torque_test_mult = 1.0
+    torque_test_mult = 1.0;
     
 
     %% Hybrid factors
@@ -61,7 +61,7 @@ function [gg, max_speed, min_speed] = gg_gen(engine_file)
     
     while 1
         w_rps = (speed / w_cir);
-        [w_torque, rpm, gear] = output_torque(torque, gears * final_drive, w_rps, cvt);
+        [w_torque, rpm, gear, fcps] = output_torque(torque, gears * final_drive, w_rps, cvt);
         drag = .5 * cd * A * rho * (speed^2);
         max_eng_accel = (((w_torque * torque_test_mult * trans_eff) / w_rad_total) - drag)/ W;
         if(max_eng_accel <= 0)
@@ -80,8 +80,23 @@ function [gg, max_speed, min_speed] = gg_gen(engine_file)
             max_eng_accel = max_long_accel;
         end
         max_brake_accel = ((W * mu * long_g_mult * G) + drag)/ W; % Obvious but will be changed
-        max_lat_accel_right = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
-        max_lat_accel_left = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
+        %max_lat_accel_right = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
+        %max_lat_accel_left = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
+        
+        %-75
+        %max_lat_accel_left = (3e-08*(speed^4) - 6e-06*(speed^3) + 0.0005*(speed^2) - 0.0174*speed + 1.7398) * G;
+        %max_lat_accel_right = (-4e-10*(speed^5) + 1e-07*(speed^4) - 9e-06*(speed^3) + 0.0004*(speed^2) - 0.0075*speed - 1.3612) * G;
+        
+        %0
+        max_lat_accel_left = (6e-08*(speed^4) - 1e-05*(speed^3) + 0.0008*(speed^2) - 0.0255*speed + 1.7681) * G;
+        max_lat_accel_right = (-2e-10*(speed^5) + 6e-08*(speed^4) - 5e-06*(speed^3) + 0.0002*(speed^2) - 0.0038*speed - 1.4311) * G;
+        
+        %75
+        %max_lat_accel_left = (9e-10*(speed^5) - 2e-07*(speed^4) + 2e-05*(speed^3) - 0.0008*(speed^2) + 0.0173*speed + 1.2628) * G;
+        %max_lat_accel_right = (-4e-11*(speed^5) + 7e-09*(speed^4) - 4e-07*(speed^3) + 3e-06*(speed^2) + 0.0004*speed - 1.5062) * G;
+        
+        max_lat_accel_right = -max_lat_accel_right;
+        
         g_steps_step = (max_lat_accel_left + max_lat_accel_right) / g_steps;
         
         this_gg = [];
@@ -118,7 +133,7 @@ function [gg, max_speed, min_speed] = gg_gen(engine_file)
                 i = 0;
             end
             
-            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear]];
+            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear, fcps]];
         end
         index = round(speed / speed_step);
         gg{index} = this_gg;

@@ -4,11 +4,18 @@ clear variables
 h = msgbox("Choose a track coordinant csv file");
 uiwait(h);
 track_file = uigetfile('*.csv');
-sector_list = track_gen(track_file);
 h = msgbox("Choose a torque curve csv file");
 uiwait(h);
 engine_file = uigetfile('*.csv');
+h = msgbox("Choose a throttle map csv file");
+uiwait(h);
+throttle_file = uigetfile('*.csv');
+tic;
+throttle_map = csvread(throttle_file);
+sector_list = track_gen(track_file);
 [gg, max_speed, min_speed] = gg_gen(engine_file);
+
+heating_value = 50.4 * 1e6 * 1e3;  % MJ / kg to J/g
 
 min_rad = Inf;
 for i=1:length(sector_list(:,1))
@@ -22,10 +29,12 @@ max_corner_speeds = zeros(sectors_length, 1);
 entry_corner_speeds = zeros(sectors_length, 1);
 exit_corner_speeds = zeros(sectors_length, 1);
 epsilon = .0001;
+min_throttle = .01;
 phase_dist = 1;
 phases = cell(sectors_length, 1);
 
 p = gcp();
+cores = p.NumWorkers;
 for i=1:length(sector_list)
     async_result(i) = parfeval(p, @speed_radius, 1, sector_list(i, 1), gg, max_speed, min_speed);
 end
@@ -33,7 +42,7 @@ end
 for i=1:length(sector_list)
     [real_index, result_speed] = fetchNext(async_result);
     max_corner_speeds(real_index) = result_speed;
-    phases{real_index} = zeros(floor(sector_list(real_index, 2)), 3);
+    phases{real_index} = zeros(floor(sector_list(real_index, 2)), 5);
 end
 
 for i=1:length(slowest_index)
@@ -44,7 +53,7 @@ for i=1:length(slowest_index)
     entry_corner_speeds(next) = max_corner_speeds(slowest_index(i));
     
     phases{slowest_index(i)} = ones(floor(sector_list(slowest_index(i), 2)), 3) * max_corner_speeds(slowest_index(i));
-    
+    phases{slowest_index(i)} = [phases{slowest_index(i)}, zeros(floor(sector_list(slowest_index(i), 2)), 2)];
 end
 
 complete_corners = slowest_index;
@@ -104,7 +113,7 @@ while ~isempty(curr_corners)
             exit_phases = 1;
             for z=length(phases{curr_corner}):-1:1
                phase_exit_speed = phases{curr_corner}(z, 3);
-               long = avail_accel(phase_exit_speed, sector_list(curr_corner, 1), gg, max_speed);
+               [long, throttlebrake] = avail_accel(phase_exit_speed, sector_list(curr_corner, 1), gg, max_speed);
                brake_accel = long(2);
                time = phase_time(brake_accel, phase_exit_speed, phase_dist);
                phase_entry_speed = -brake_accel * time + phase_exit_speed;
@@ -113,15 +122,19 @@ while ~isempty(curr_corners)
                end
                max_phases_speed = phase_entry_speed;
                phases{curr_corner}(z, 2) = phase_entry_speed;
+               phases{curr_corner}(z, 4) = -throttlebrake(2);
+               phases{curr_corner}(z, 5) = 0;
                if(z > 1)
                    phases{curr_corner}(z-1, 3) = phase_entry_speed;
+                   phases{curr_corner}(z-1, 4) = -throttlebrake(2);
+                   phases{curr_corner}(z-1, 5) = 0;
                end
                exit_phases = exit_phases + 1;
             end
         end
         for z=1:(length(phases{curr_corner})-exit_phases)
             phase_entry_speed = phases{curr_corner}(z, 2);
-            long = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg, max_speed);
+            [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg, max_speed);
             engine_accel = long(1);
             time = phase_time(engine_accel, phase_entry_speed, phase_dist);
             phase_exit_speed = engine_accel * time + phase_entry_speed;
@@ -129,8 +142,22 @@ while ~isempty(curr_corners)
                 phase_exit_speed = max_phases_speed;
             end
             phases{curr_corner}(z, 3) = phase_exit_speed;
+            if(throttlebrake(1) > min_throttle)
+                phases{curr_corner}(z, 4) = throttlebrake(1);
+                phases{curr_corner}(z, 5) = consump(gg, phase_entry_speed, time, throttle_map, throttlebrake(1));
+            else
+                phases{curr_corner}(z, 4) = 0;
+                phases{curr_corner}(z, 5) = 0;
+            end
             if(z < length(phases{curr_corner}))
                 phases{curr_corner}(z+1, 2) = phase_exit_speed;
+                if(throttlebrake(1) > min_throttle)
+                    phases{curr_corner}(z+1, 4) = throttlebrake(1);
+                    phases{curr_corner}(z+1, 5) = consump(gg, phase_entry_speed, time, throttle_map, throttlebrake(1));
+                else
+                    phases{curr_corner}(z+1, 4) = 0;
+                    phases{curr_corner}(z+1, 5) = 0;
+                end
             end
         end
         
@@ -167,4 +194,16 @@ for i=1:length(times)
     end
 end
 
+total_phases = phases{1};
+for i=2:length(phases)
+    total_phases = [total_phases; phases{i}];
+end
+
 total_time = sum(times);
+energy = sum(total_phases(:,5))*heating_value;
+disp("Lap time is " + total_time + "s");
+disp("Cores: " + cores);
+disp("Fuel J used " + energy);
+disp("------------");
+disp("Lapajoule rating: " + ((1/total_time)/energy) * 1e15);
+toc

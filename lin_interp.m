@@ -65,6 +65,13 @@ function y = lin_interp(x_arr, y_arr, x, extrap)
             y1 = y_arr(i);
             x2 = x_arr(i+1);
             y2 = y_arr(i+1);
+            if(x1-x == 0)
+                y = y_arr(i);
+                return
+            elseif(x2-x == 0)
+                y = y_arr(i+1);
+                return
+            end
             if((x1-x) * (x2-x) < 0)
                 break
             end
