@@ -9,8 +9,10 @@ function out = conv_unit(in, unit_from, unit_to)
     % rpm rps rad/s
     % kg lb
     out = NaN;
+    if(strcmpi(unit_from, unit_to))
+        out = in;
     % Torque
-    if(strcmpi(unit_from, "Nm"))
+    elseif(strcmpi(unit_from, "Nm"))
         if(strcmpi(unit_to, "lb-ft"))
             out = in * 1.35582;
         end

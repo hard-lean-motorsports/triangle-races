@@ -4,18 +4,18 @@ clear variables
 h = msgbox("Choose a track coordinant csv file");
 uiwait(h);
 track_file = uigetfile('*.csv');
-h = msgbox("Choose a torque curve csv file");
+h = msgbox("Choose a bike description file");
 uiwait(h);
-engine_file = uigetfile('*.csv');
+bike_file = uigetfile('*.xlsx');
 h = msgbox("Choose a throttle map csv file");
 uiwait(h);
 throttle_file = uigetfile('*.csv');
 tic;
 throttle_map = csvread(throttle_file);
 sector_list = track_gen(track_file);
-[gg, max_speed, min_speed] = gg_gen(engine_file);
+[gg, max_speed, min_speed] = gg_gen(bike_file);
 
-heating_value = 50.4 * 1e6 * 1e3;  % MJ / kg to J/g
+heating_value = 50.4 * 1e6 * 1e-3;  % MJ / kg to J/g
 
 min_rad = Inf;
 for i=1:length(sector_list(:,1))
@@ -205,5 +205,5 @@ disp("Lap time is " + total_time + "s");
 disp("Cores: " + cores);
 disp("Fuel J used " + energy);
 disp("------------");
-disp("Lapajoule rating: " + ((1/total_time)/energy) * 1e15);
+disp("Lapajoule rating: " + ((1/total_time)/energy) * 1e9);
 toc
