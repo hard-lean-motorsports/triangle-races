@@ -1,14 +1,14 @@
-function [v, gg, max_speed, min_speed] = speed_radius(rad, gg_in, max_speed_in, min_speed_in)
+function [v, gg] = speed_radius(rad, gg_in)
     % speed_radius Given a radius, return the maximum speed.
-    % USAGE: [v, gg, max_speed] = speed_radius(rad, gg_in, max_speed_in);
-    % gg and max_speed are optional and will be generated if not known.
+    % USAGE: [v, gg] = speed_radius(rad, gg_in);
+    % gg is optional and will be generated if not known.
     
-    if(~exist("gg_in", "var") || ~exist("max_speed_in", "var"))
-        [gg_in, max_speed_in] = gg_gen();
+    if(~exist("gg_in", "var"))
+        gg_in = gg_gen();
     end
     gg = gg_in;
     speed_step = gg{1};
-    max_speed = max_speed_in;
+    max_speed = gg{4};
     step = .001;
     
     max_dir = "max";
@@ -18,21 +18,12 @@ function [v, gg, max_speed, min_speed] = speed_radius(rad, gg_in, max_speed_in, 
        rad = -rad;
     end
     
-    if(~exist("min_speed_in", "var"))
-        for i=2:(max_speed/speed_step)
-            if(~isempty(gg{i}))
-                min_speed_in = i * speed_step;
-                break
-            end 
-        end
-    end
-    
-    min_speed = min_speed_in + speed_step;
+    min_speed = gg{3} + speed_step;
     
     v = 0;
     
     for i=max_speed:-step:min_speed
-        lat_accel = gg_accel(i, max_dir, [], gg, max_speed);
+        lat_accel = gg_accel(i, max_dir, [], gg);
         if(max_dir == "-max")
             lat_accel = -lat_accel;
         end
@@ -40,6 +31,10 @@ function [v, gg, max_speed, min_speed] = speed_radius(rad, gg_in, max_speed_in, 
             v = i;
             break
         end
+    end
+    
+    if(v == 0)
+        error("Maximum speed at the cornering radius is lower than the minimum speed of the vehicle.");
     end
     
 end

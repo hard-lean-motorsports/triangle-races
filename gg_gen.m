@@ -1,18 +1,71 @@
 function [gg, max_speed, min_speed] = gg_gen(bike_file)
     % gg_gen Generates speed dependant GG-diagram
 
+    warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
     vd_table = readtable(bike_file, "Sheet", "vehicledyn");
     eng_table = readtable(bike_file, "Sheet", "engine");
     gear_table = readtable(bike_file, "Sheet", "gear");
+    warning('on', 'MATLAB:table:ModifiedAndSavedVarnames');
     
     %% God factors
     epsilon = 1e-5;
     G = str2double(vd_table{1, 2}{1});
-    
+    heating_value = str2double(vd_table{10, 2}{1}) * 1e6 * 1e-3;
     
     %% VD factors
     W = str2double(vd_table{3, 2}{1});
     mu = 1;
+    accel_interp = 0;
+    accel_interp_arr = [];
+    accel_val = 0;
+    brake_interp = 0;
+    brake_interp_arr = [];
+    brake_val = 0;
+    left_interp = 0;
+    left_interp_arr = [];
+    left_val = 0;
+    right_interp = 0;
+    right_interp_arr = [];
+    right_val = 0;
+    
+    if(isnan(vd_table{1, 4}))
+        brake_interp = 1;
+        brake_interp_arr = nan_end_extract(vd_table{2:end, 4});   
+    else
+        brake_val = vd_table{1, 4};
+        if(~isnumeric(brake_val))
+            brake_val = str2double(brake_val);
+        end
+    end
+    if(isnan(vd_table{1, 8}))
+        accel_interp = 1;
+        accel_interp_arr = nan_end_extract(vd_table{2:end, 8});
+    else
+        accel_val = vd_table{1, 8};
+        if(~isnumeric(accel_val))
+            accel_val = str2double(accel_val);
+        end
+    end    
+    if(isnan(vd_table{1, 12}))
+        left_interp = 1;
+        left_interp_arr = nan_end_extract(vd_table{2:end, 12});
+    else
+        left_val = vd_table{1, 12};
+        if(~isnumeric(left_val))
+            left_val = str2double(left_val);
+        end
+    end 
+    if(isnan(vd_table{1, 16}))
+        right_interp = 1;
+        right_interp_arr = nan_end_extract(vd_table{2:end, 16});
+    else
+        right_val = vd_table{1, 16};
+        if(~isnumeric(right_val))
+            right_val = str2double(right_val);
+        end
+    end 
+    
+    interp_arr = nan_end_extract(vd_table{2:end, 3});
 
     %% Aero factors
     rho = str2double(vd_table{2, 2}{1});
@@ -55,41 +108,64 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     
     while 1
         w_rps = (speed / w_cir);
-        [w_torque, rpm, gear, fcps] = output_torque(torque, gears * final_drive, w_rps, cvt);
+        [w_torque, rpm, gear] = output_torque(torque, gears * final_drive, w_rps, cvt);
         drag = .5 * cd * A * rho * (speed^2);
-        max_eng_accel = (((w_torque * trans_eff) / w_rad_total) - drag)/ W;
-        if(max_eng_accel <= 0)
-            if(start == 0)
-                speed = speed + speed_step;
-                continue
-            end
-            break
-        else
-           if(start == 0)
-               start = speed;
-           end
+        lift = .5 * cl * A * rho * (speed^2);
+        lift_mult = 1;
+        if(lift < 0)
+            lift_mult = (W*G-lift) / (W*G);
+        elseif(lift > 0)
+            lift_mult = (W*G) / (W*G+lift);
         end
-        max_long_accel = (W * mu * G) / W; % Obvious but will be changed
+        
+        max_eng_accel = (((w_torque * trans_eff) / w_rad_total) - drag)/ W;
+        if(max_eng_accel <=0)
+            break
+        end
+        max_long_accel = 0;
+        if(accel_interp)
+            max_long_accel = lin_interp(interp_arr,accel_interp_arr,speed) * G;
+        else
+            max_long_accel = accel_val * lift_mult * G;
+        end
         if(max_eng_accel > max_long_accel)
             max_eng_accel = max_long_accel;
         end
-        max_brake_accel = ((W * mu * G) + drag)/ W; % Obvious but will be changed
-        %max_lat_accel_right = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
-        %max_lat_accel_left = (W * mu * lat_g_mult * G) / W; % Obvious but will be changed
         
-        %-75
-        %max_lat_accel_left = (3e-08*(speed^4) - 6e-06*(speed^3) + 0.0005*(speed^2) - 0.0174*speed + 1.7398) * G;
-        %max_lat_accel_right = (-4e-10*(speed^5) + 1e-07*(speed^4) - 9e-06*(speed^3) + 0.0004*(speed^2) - 0.0075*speed - 1.3612) * G;
+        max_brake_accel = 0;
+        if(brake_interp)
+            brake_accel_val = lin_interp(interp_arr,brake_interp_arr,speed);
+            if(brake_accel_val < 0)
+                brake_accel_val = -brake_accel_val;
+            end
+            max_brake_accel = brake_accel_val * G;
+        else
+            if(brake_val < 0)
+                brake_val = -brake_val;
+            end
+            max_brake_accel = brake_val * lift_mult * G + (drag / W);
+        end
         
-        %0
-        max_lat_accel_left = (6e-08*(speed^4) - 1e-05*(speed^3) + 0.0008*(speed^2) - 0.0255*speed + 1.7681) * G;
-        max_lat_accel_right = (-2e-10*(speed^5) + 6e-08*(speed^4) - 5e-06*(speed^3) + 0.0002*(speed^2) - 0.0038*speed - 1.4311) * G;
+        max_lat_accel_left = 0;
+        if(left_interp)
+            max_lat_accel_left = lin_interp(interp_arr,left_interp_arr,speed) * G;
+        else
+            max_lat_accel_left = left_val * lift_mult * G;
+        end
         
-        %75
-        %max_lat_accel_left = (9e-10*(speed^5) - 2e-07*(speed^4) + 2e-05*(speed^3) - 0.0008*(speed^2) + 0.0173*speed + 1.2628) * G;
-        %max_lat_accel_right = (-4e-11*(speed^5) + 7e-09*(speed^4) - 4e-07*(speed^3) + 3e-06*(speed^2) + 0.0004*speed - 1.5062) * G;
-        
-        max_lat_accel_right = -max_lat_accel_right;
+        max_lat_accel_right = 0;
+        if(right_interp)
+            right_accel_val = lin_interp(interp_arr,right_interp_arr,speed);
+            if(right_accel_val < 0)
+                right_accel_val = -right_accel_val;
+            end
+            max_lat_accel_right = right_accel_val * G;
+        else
+            if(right_val < 0)
+                right_val = -right_val;
+            end
+            max_lat_accel_right = right_val * lift_mult * G;
+        end
         
         g_steps_step = (max_lat_accel_left + max_lat_accel_right) / g_steps;
         
@@ -127,17 +203,19 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
                 i = 0;
             end
             
-            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear, fcps]];
+            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear]];
         end
         index = round(speed / speed_step);
         gg{index} = this_gg;
 
         speed = speed + speed_step;
     end
-    min_speed = start;
+    
+    min_speed = 6*speed_step;
     max_speed = speed-speed_step;
     gg{1} = speed_step;
+    gg{2} = torque;
+    gg{3} = min_speed;
+    gg{4} = max_speed;
+    gg{5} = heating_value;
 end
-
-
-
