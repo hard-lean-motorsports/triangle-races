@@ -1,4 +1,4 @@
-function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_list, gg)
+function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim(sector_list, gg)
     %lap_sim This is the actual laptime simulation code
     % This takes in a sector list array and a gg object, and returns
     % the total lap time, lap phases, energy used, lapajoule rating, and
@@ -21,6 +21,8 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
     min_throttle = .01;
     phase_dist = 1;
     phases = cell(sectors_length, 1);
+    second_try = 0;
+    retries = 2;
 
     p = gcp();
     cores = p.NumWorkers;
@@ -70,6 +72,16 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
             entry_speed_set = 0;
             exit_speed_set = 0;
 
+            if(entry_corner_speeds(curr_corner) > 0)
+                max_entry_speed = entry_corner_speeds(curr_corner)-epsilon;
+                phases{curr_corner}(1, 2) = entry_corner_speeds(curr_corner);
+            end
+
+            if(exit_corner_speeds(curr_corner) > 0)
+                max_exit_speed = exit_corner_speeds(curr_corner)-epsilon;
+                phases{curr_corner}(end, 3) = exit_corner_speeds(curr_corner);
+            end
+            
             if(phases{prev}(end,3) > 0)
                 max_entry_speed = phases{prev}(end,3);
                 entry_corner_speeds(curr_corner) = max_entry_speed;
@@ -80,31 +92,41 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
                 exit_corner_speeds(curr_corner) = max_exit_speed;
             end
 
-            if(entry_corner_speeds(curr_corner) > 0)
-                max_entry_speed = entry_corner_speeds(curr_corner)-epsilon;
-                phases{curr_corner}(1, 2) = entry_corner_speeds(curr_corner);
-                entry_speed_set = 1;
-            end
-
-            if(exit_corner_speeds(curr_corner) > 0)
-                max_exit_speed = exit_corner_speeds(curr_corner);
-                phases{curr_corner}(end, 3) = exit_corner_speeds(curr_corner);
-                exit_speed_set = 1;
-            end
-
             if(max_corner_speeds(next) < max_exit_speed)
                 max_exit_speed = max_corner_speeds(next);
             end
             if(max_corner_speeds(prev) < max_entry_speed)
                 max_entry_speed = max_corner_speeds(prev);
             end
+            
+            if(max_exit_speed > entry_corner_speeds(next) && entry_corner_speeds(next) > 0)
+                max_exit_speed = entry_corner_speeds(next);
+            end
+            if(exit_corner_speeds(curr_corner) > 0 && exit_corner_speeds(curr_corner) < max_exit_speed)
+                max_exit_speed = exit_corner_speeds(curr_corner);
+            end
+            
+            if(max_entry_speed > exit_corner_speeds(prev) && exit_corner_speeds(prev) > 0)
+                max_entry_speed = exit_corner_speeds(prev);
+            end
+            if(entry_corner_speeds(curr_corner) > 0 && entry_corner_speeds(curr_corner) < max_exit_speed)
+                max_entry_speed = entry_corner_speeds(curr_corner);
+            end
+            
+            if(phases{curr_corner}(1, 2) > max_entry_speed || phases{curr_corner}(1, 2) == 0)
+                phases{curr_corner}(1, 2) = max_entry_speed;
+            end
+            
+            if(phases{curr_corner}(end, 3) > max_exit_speed || phases{curr_corner}(end, 3) == 0)
+                phases{curr_corner}(end, 3) = max_exit_speed;
+            end
 
             exit_phases = 0;
             max_phases_speed = max_corner_speed;
-            if(phases{curr_corner}(end, 3) == 0)
+            if(phases{curr_corner}(end, 3) == 0 || phases{curr_corner}(end, 3) > max_exit_speed)
                 phases{curr_corner}(end, 3) = max_exit_speed;
             end
-            if(phases{curr_corner}(1, 2) == 0)
+            if(phases{curr_corner}(1, 2) == 0 || phases{curr_corner}(1, 2) > max_entry_speed)
                 phases{curr_corner}(1, 2) = max_entry_speed;
             end
 
@@ -120,6 +142,29 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
                         break
                     end
                     max_phases_speed = phase_entry_speed;
+                    toofast = 0;
+                    temp_accel = zeros(z, 5);
+                    if(max_phases_speed > max_entry_speed && phases{curr_corner}(1, 2) > 0)
+                       temp_accel(1, :) = phases{curr_corner}(1, :);
+                        for x=1:z
+                           phase_entry_speed = temp_accel(x, 2);
+                           long = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg);
+                           engine_accel = long(1);
+                           time = phase_time(engine_accel, phase_entry_speed, phase_dist);
+                           phase_exit_speed = engine_accel * time + phase_entry_speed;
+                           if(max_corner_speed - phase_exit_speed < epsilon)
+                               phase_exit_speed = max_corner_speed;
+                           end
+                           temp_accel(x, 3) = phase_exit_speed;
+                           temp_accel(x+1, 2) = phase_exit_speed;
+                        end
+                       if(temp_accel(end, 3) < phases{curr_corner}(z, 3))
+                           toofast = 1;
+                       end
+                    end
+                    if(toofast == 1)
+                        break
+                    end
                     phases{curr_corner}(z, 2) = phase_entry_speed;
                     phases{curr_corner}(z, 4) = -throttlebrake(2);
                     phases{curr_corner}(z, 5) = 0;
@@ -159,7 +204,21 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
                     end
                 end
             end
-
+            
+            if(phases{curr_corner}(end, 4) > 0)
+                phase_entry_speed = phases{curr_corner}(end, 2);
+                long = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg);
+                engine_accel = long(1);
+                time = phase_time(engine_accel, phase_entry_speed, phase_dist);
+                phase_exit_speed = engine_accel * time + phase_entry_speed;
+                if(phase_exit_speed < phases{curr_corner}(end, 3))
+                    phases{curr_corner}(end, 3) = phase_exit_speed;
+                    exit_corner_speeds(curr_corner) = phases{i}(end, 3);
+                    entry_corner_speeds(next) = exit_corner_speeds(i);
+                    disp(curr_corner)
+                end
+            end
+            
             entry_corner_speeds(curr_corner) = phases{curr_corner}(1, 2);
             exit_corner_speeds(prev) = entry_corner_speeds(curr_corner);
             exit_corner_speeds(curr_corner) = phases{curr_corner}(end, 3);
@@ -175,7 +234,7 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
                 complete_corners = [complete_corners; curr_corners(i)];
             end
         end
-        %complete_corners = [complete_corners; curr_corners];
+        complete_corners = [complete_corners; curr_corners];
         curr_corners = [];
         for i=1:length(complete_corners)
             [prev, next] = ring_index(complete_corners(i), sectors_length);
@@ -185,44 +244,41 @@ function [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_
             if(~ismember(next, complete_corners) && ~ismember(next, curr_corners))
                 curr_corners = [curr_corners; next];
             end
-            if(phases{complete_corners(i)}(end, 3) < phases{next}(1, 2) && ~ismember(next, curr_corners))
-                entry_corner_speeds(next) = phases{complete_corners(i)}(end, 3);
-                phases{next}(1, 2) = phases{complete_corners(i)}(end, 3);
-                exit_corner_speeds(complete_corners(i)) = phases{complete_corners(i)}(end, 3);
-                entry_corner_speeds(next) = phases{complete_corners(i)}(end, 3);
-                for z=1:(length(phases{next}))
-                    phase_entry_speed = phases{next}(z, 2);
-                    [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(next, 1), gg);
+        end
+        if(isempty(curr_corners) && second_try < retries)
+            for i=1:sectors_length
+                [prev, next] = ring_index(i, sectors_length);
+                curr_corners = [curr_corners; i];
+                if(phases{i}(end, 4) > 0)
+                    phase_entry_speed = phases{i}(end, 2);
+                    long = avail_accel(phase_entry_speed, sector_list(i, 1), gg);
                     engine_accel = long(1);
                     time = phase_time(engine_accel, phase_entry_speed, phase_dist);
                     phase_exit_speed = engine_accel * time + phase_entry_speed;
-                    if(max_phases_speed - phase_exit_speed < epsilon)
-                        phase_exit_speed = max_phases_speed;
-                    end
-                    phases{next}(z, 3) = phase_exit_speed;
-                    if(throttlebrake(1) > min_throttle)
-                        phases{next}(z, 4) = throttlebrake(1);
-                        phases{next}(z, 5) = consump(gg, phase_entry_speed, time, throttlebrake(1));
-                    else
-                        phases{next}(z, 4) = 0;
-                        phases{next}(z, 5) = 0;
-                    end
-                    if(z < length(phases{next}))
-                        if(phases{next}(z+1, 2) < phase_exit_speed)
-                            phases{next}(z, 3) = phases{next}(z+1, 2);
-                            break
-                        end 
-                        phases{next}(z+1, 2) = phase_exit_speed;
-                        if(throttlebrake(1) > min_throttle)
-                            phases{next}(z+1, 4) = throttlebrake(1);
-                            phases{next}(z+1, 5) = consump(gg, phase_entry_speed, time, throttlebrake(1));
-                        else
-                            phases{next}(z+1, 4) = 0;
-                            phases{next}(z+1, 5) = 0;
-                        end
+                    if(phase_exit_speed < phases{i}(end, 3))
+                        phases{i}(end, 3) = phase_exit_speed;
+                        exit_corner_speeds(i) = phases{i}(end, 3);
+                        entry_corner_speeds(next) = exit_corner_speeds(i);
                     end
                 end
+                if(exit_corner_speeds(i) > phases{i}(end, 3))
+                    exit_corner_speeds(i) = phases{i}(end, 3);                    
+                    entry_corner_speeds(next) = exit_corner_speeds(i);
+                end
+                if(entry_corner_speeds(i) > phases{i}(1, 2))
+                    entry_corner_speeds(i) = phases{i}(1, 2);
+                    exit_corner_speeds(prev) = entry_corner_speeds(i);
+                end
+                if(phases{i}(end, 3) < exit_corner_speeds(i))
+                    phases{i}(end, 3) = exit_corner_speeds(i);
+                    entry_corner_speeds(next) = exit_corner_speeds(i);
+                end
+                if(phases{i}(1, 2) < entry_corner_speeds(i))
+                    phases{i}(1, 2) = entry_corner_speeds(i);
+                    exit_corner_speeds(prev) = entry_corner_speeds(i);
+                end
             end
+            second_try = second_try + 1;
         end
     end
 

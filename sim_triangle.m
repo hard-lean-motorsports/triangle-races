@@ -1,6 +1,7 @@
 %% Main program. Run this.
 
 clear variables
+clc
 h = msgbox("Choose a track coordinant csv file");
 uiwait(h);
 track_file = uigetfile({'*.csv', "Track Description .csv file"});
@@ -30,7 +31,7 @@ for i=1:length(bikes_array)
     tic;
     gg = gg_gen(bikes_array{i});
     try
-        [total_time, total_phases, energy, lapajoules, cores] = lap_sim(sector_list, gg);
+        [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim(sector_list, gg);
         elapsed = toc;
         results(i,:) = {strcat(bikes_array{i}), total_time, total_phases, energy, lapajoules, cores, elapsed};
     catch ME
