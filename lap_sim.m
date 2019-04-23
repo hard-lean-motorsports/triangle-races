@@ -24,16 +24,10 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
     second_try = 0;
     retries = 2;
 
-    p = gcp();
-    cores = p.NumWorkers;
+    cores = 1;
     for i=1:length(sector_list)
-        async_result(i) = parfeval(p, @speed_radius, 1, sector_list(i, 1), gg);
-    end
-
-    for i=1:length(sector_list)
-        [real_index, result_speed] = fetchNext(async_result);
-        max_corner_speeds(real_index) = result_speed;
-        phases{real_index} = zeros(floor(sector_list(real_index, 2)), 5);
+        max_corner_speeds(i) = speed_radius(sector_list(i, 1), gg);
+        phases{i} = zeros(floor(sector_list(i, 2)), 5);
     end
 
     for i=1:length(slowest_index)
@@ -215,7 +209,6 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
                     phases{curr_corner}(end, 3) = phase_exit_speed;
                     exit_corner_speeds(curr_corner) = phases{i}(end, 3);
                     entry_corner_speeds(next) = exit_corner_speeds(i);
-                    disp(curr_corner)
                 end
             end
             
