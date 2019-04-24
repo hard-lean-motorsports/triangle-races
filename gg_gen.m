@@ -14,56 +14,27 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     
     %% VD factors
     W = str2double(vd_table{3, 2}{1});
-    mu = 1;
     accel_interp = 0;
     accel_interp_arr = [];
+    accel_weight_arr = [];
     accel_val = 0;
     brake_interp = 0;
     brake_interp_arr = [];
+    brake_weight_arr = [];
     brake_val = 0;
     left_interp = 0;
     left_interp_arr = [];
+    left_weight_arr = [];
     left_val = 0;
     right_interp = 0;
     right_interp_arr = [];
+    right_weight_arr = [];
     right_val = 0;
     
-    if(isnan(vd_table{1, 4}))
-        brake_interp = 1;
-        brake_interp_arr = nan_end_extract(vd_table{2:end, 4});   
-    else
-        brake_val = vd_table{1, 4};
-        if(~isnumeric(brake_val))
-            brake_val = str2double(brake_val);
-        end
-    end
-    if(isnan(vd_table{1, 8}))
-        accel_interp = 1;
-        accel_interp_arr = nan_end_extract(vd_table{2:end, 8});
-    else
-        accel_val = vd_table{1, 8};
-        if(~isnumeric(accel_val))
-            accel_val = str2double(accel_val);
-        end
-    end    
-    if(isnan(vd_table{1, 12}))
-        left_interp = 1;
-        left_interp_arr = nan_end_extract(vd_table{2:end, 12});
-    else
-        left_val = vd_table{1, 12};
-        if(~isnumeric(left_val))
-            left_val = str2double(left_val);
-        end
-    end 
-    if(isnan(vd_table{1, 16}))
-        right_interp = 1;
-        right_interp_arr = nan_end_extract(vd_table{2:end, 16});
-    else
-        right_val = vd_table{1, 16};
-        if(~isnumeric(right_val))
-            right_val = str2double(right_val);
-        end
-    end 
+    [brake_interp, brake_interp_arr, brake_val, brake_weight_arr] = extract_vd_info(vd_table, 4);
+    [accel_interp, accel_interp_arr, accel_val, accel_weight_arr] = extract_vd_info(vd_table, 8);
+    [left_interp, left_interp_arr, left_val, left_weight_arr] = extract_vd_info(vd_table, 12);
+    [right_interp, right_interp_arr, right_val, right_weight_arr] = extract_vd_info(vd_table, 16);
     
     interp_arr = nan_end_extract(vd_table{2:end, 3});
 
@@ -101,13 +72,16 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     r_tyre_dia = tyre_dia_read(r_tyre_dia_str);
     f_tyre_dia = tyre_dia_read(f_tyre_dia_str);
     s_tyre_dia = tyre_dia_read(s_tyre_dia_str);
-    w_rad_total = r_tyre_dia;
+    w_rad_total = r_tyre_dia / 2;
     w_cir = w_rad_total * 2 * pi;
     
     start = 0;
     
     while 1
         w_rps = (speed / w_cir);
+        w_rps_r = w_rps;
+        w_rps_f = (speed / (f_tyre_dia * pi));
+        w_rps_s = (speed / (s_tyre_dia * pi));
         [w_torque, rpm, gear] = output_torque(torque, gears * final_drive, w_rps, cvt);
         drag = .5 * cd * A * rho * (speed^2);
         lift = .5 * cl * A * rho * (speed^2);
@@ -133,6 +107,7 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
         end
         
         max_brake_accel = 0;
+        max_pure_brake_accel = 0;
         if(brake_interp)
             brake_accel_val = lin_interp(interp_arr,brake_interp_arr,speed);
             if(brake_accel_val < 0)
@@ -143,7 +118,8 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
             if(brake_val < 0)
                 brake_val = -brake_val;
             end
-            max_brake_accel = brake_val * lift_mult * G + (drag / W);
+            max_pure_brake_accel = brake_val * lift_mult;
+            max_brake_accel = max_pure_brake_accel * G + (drag / W);
         end
         
         max_lat_accel_left = 0;
@@ -181,9 +157,11 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
                     eng_accel = max_eng_accel;
                 end
                 brake_accel = real(-max_brake_accel * sin(t));
+                brake_accel_pure = real(-max_pure_brake_accel * sin(t));
             elseif(i == 0)
                 eng_accel = max_eng_accel;
                 brake_accel = -max_brake_accel;
+                brake_accel_pure = -max_pure_brake_accel * sin(t);
             else
                 t = real(acos(i/max_lat_accel_left));
                 eng_accel = real(max_long_accel * sin(t));
@@ -191,6 +169,7 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
                     eng_accel = max_eng_accel;
                 end
                 brake_accel = -max_brake_accel * sin(t);
+                brake_accel_pure = -max_pure_brake_accel * sin(t);
             end
 
             if(eng_accel < epsilon)
@@ -203,7 +182,16 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
                 i = 0;
             end
             
-            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear]];
+            max_accel_arr = weight_arr_interp(speed, interp_arr, accel_weight_arr, accel_interp);
+            max_brake_arr = weight_arr_interp(speed, interp_arr, brake_weight_arr, brake_interp);
+            max_left_arr = weight_arr_interp(speed, interp_arr, left_weight_arr, left_interp);
+            max_right_arr = weight_arr_interp(speed, interp_arr, right_weight_arr, right_interp);
+            lat_load_trans = floor((i/G) * 1000)/1000;
+            eng_load_trans = floor((eng_accel/G) * 1000)/1000;
+            brake_load_trans = floor((brake_accel_pure/G) * 1000)/1000;
+            [f_weight_eng, r_weight_eng, s_weight_eng] = load_transfer(lat_load_trans, eng_load_trans, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
+            [f_weight_brake, r_weight_brake, s_weight_brake] = load_transfer(lat_load_trans, brake_load_trans, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
+            this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear, w_rps_f, w_rps_r, w_rps_f, f_weight_eng, r_weight_eng, s_weight_eng, f_weight_brake, r_weight_brake, s_weight_brake]];
         end
         index = round(speed / speed_step);
         gg{index} = this_gg;

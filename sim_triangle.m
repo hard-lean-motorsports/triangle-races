@@ -100,6 +100,6 @@ disp("Results for track " + track_file);
 disp(length(bikes_array) + " bikes on " + total_cores + " core(s) took " + total_elapsed + "s");
 disp("Total threading efficiency is: " + threading_eff * 100 + "%");
 for i=1:length(bikes_array)
-   disp("File " + results{i,1} + " laptime: " + results{i,2} + " lapajoule rating: " + results{i,5})
+   disp("File " + results{i,1} + " laptime: " + results{i,2} + " energy used: " + results{i,4} + "j lapajoule rating: " + results{i,5})
    disp("File " + results{i,1} + " took " + results{i,7} + "s on " + results{i,6} + " core(s)");
 end
