@@ -40,10 +40,6 @@ function [lat, long, energy, throttlebrake, gg_out] = gg_accel(vel, lat_in, long
    
     high_vel_mult = .5;
     
-    if(vel < 5)
-        disp(vel)
-    end
-    
     if(low_vel ~= high_vel)
         high_vel_mult = (vel - low_vel) / (high_vel - low_vel);
     end

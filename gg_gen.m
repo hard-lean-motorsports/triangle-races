@@ -141,19 +141,27 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
         elseif(lift > 0)
             lift_mult = (W*G) / (W*G+lift);
         end
-        
+        max_accel_arr = weight_arr_interp(speed, interp_arr, accel_weight_arr, accel_interp);
+        max_brake_arr = weight_arr_interp(speed, interp_arr, brake_weight_arr, brake_interp);
+        max_left_arr = weight_arr_interp(speed, interp_arr, left_weight_arr, left_interp);
+        max_right_arr = weight_arr_interp(speed, interp_arr, right_weight_arr, right_interp);
         max_eng_accel = (((w_torque * trans_eff) / w_rad_total) - drag)/ W;
+        
         if(max_eng_accel <=0)
             break
         end
         max_long_accel = 0;
+        max_rear_accel = 0;
         if(accel_interp)
             max_long_accel = lin_interp(interp_arr,accel_interp_arr,speed) * G;
         else
             max_long_accel = accel_val * lift_mult * G;
         end
-        if(max_eng_accel > max_long_accel)
-            max_eng_accel = max_long_accel;
+        
+        max_rear_accel = max_wheel_accel(1, [0, 1, 0], max_accel_arr, max_brake_arr, max_left_arr, max_right_arr) * G;
+        
+        if(max_eng_accel > max_rear_accel)
+            max_eng_accel = max_rear_accel;
         end
         
         max_brake_accel = 0;
@@ -203,8 +211,8 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
             avail_eng_accel = 0;
             if(i < 0)
                 t = real(acos(i/-max_lat_accel_right));
-                eng_accel = real(max_long_accel * sin(t));
-                avail_eng_accel = eng_accel;
+                eng_accel = real(max_rear_accel * sin(t));
+                avail_eng_accel = real(max_long_accel * sin(t));
                 if(eng_accel >= max_eng_accel)
                     eng_accel = max_eng_accel;
                 end
@@ -269,19 +277,16 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
                 end
             end
             
-            max_accel_arr = weight_arr_interp(speed, interp_arr, accel_weight_arr, accel_interp);
-            max_brake_arr = weight_arr_interp(speed, interp_arr, brake_weight_arr, brake_interp);
-            max_left_arr = weight_arr_interp(speed, interp_arr, left_weight_arr, left_interp);
-            max_right_arr = weight_arr_interp(speed, interp_arr, right_weight_arr, right_interp);
+
             lat_load_trans = floor((i/G) * 1000)/1000;
             eng_load_trans = floor((eng_accel/G) * 1000)/1000;
             brake_load_trans = floor((brake_accel_pure/G) * 1000)/1000;
             [f_weight_eng, r_weight_eng, s_weight_eng] = load_transfer(lat_load_trans, eng_load_trans, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
             [f_weight_brake, r_weight_brake, s_weight_brake] = load_transfer(lat_load_trans, brake_load_trans, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
             this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear, avail_eng_accel, ...
-                {w_rps_f, w_rps_r, w_rps_f}, {f_weight_eng, r_weight_eng, ...
-                s_weight_eng}, {f_weight_brake, r_weight_brake, s_weight_brake}, ...
-                {f_motor_gear, r_motor_gear, s_motor_gear} ...
+                w_rps_f, w_rps_r, w_rps_f, f_weight_eng, r_weight_eng, ...
+                s_weight_eng, f_weight_brake, r_weight_brake, s_weight_brake, ...
+                f_motor_gear, r_motor_gear, s_motor_gear ...
                 ]];
         end
         index = round(speed / speed_step);
