@@ -7,7 +7,7 @@ function [F, R, S] = load_transfer(lat_in, long_in, max_accel_arr, max_brake_arr
     end
     
     if lat_in > max_left_arr(1) || long_in < max_right_arr(1)
-        error("Lat_in above vehicle capability");
+        error("Lat_in above vehicle capability: " + lat_in);
     end
     
     max_brake = neg_val(max_brake_arr(1));

@@ -1,4 +1,4 @@
-function [v, gg] = speed_radius(rad, gg_in)
+function [v, gg] = speed_radius(rad, gg_in, weight_trans)
     % speed_radius Given a radius, return the maximum speed.
     % USAGE: [v, gg] = speed_radius(rad, gg_in);
     % gg is optional and will be generated if not known.
@@ -23,7 +23,7 @@ function [v, gg] = speed_radius(rad, gg_in)
     v = 0;
     
     for i=max_speed:-step:min_speed
-        lat_accel = gg_accel(i, max_dir, [], gg);
+        lat_accel = gg_accel(i, max_dir, [], gg, weight_trans);
         if(max_dir == "-max")
             lat_accel = -lat_accel;
         end

@@ -1,4 +1,4 @@
-function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim(sector_list, gg)
+function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim(sector_list, gg, weight_trans)
     %lap_sim This is the actual laptime simulation code
     % This takes in a sector list array and a gg object, and returns
     % the total lap time, lap phases, energy used, lapajoule rating, and
@@ -26,8 +26,8 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
 
     cores = 1;
     for i=1:length(sector_list)
-        max_corner_speeds(i) = speed_radius(sector_list(i, 1), gg);
-        phases{i} = zeros(floor(sector_list(i, 2)), 5);
+        max_corner_speeds(i) = speed_radius(sector_list(i, 1), gg, []);
+        phases{i} = zeros(floor(sector_list(i, 2)), 6);
     end
 
     for i=1:length(slowest_index)
@@ -38,7 +38,7 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
         entry_corner_speeds(next) = max_corner_speeds(slowest_index(i));
 
         phases{slowest_index(i)} = ones(floor(sector_list(slowest_index(i), 2)), 3) * max_corner_speeds(slowest_index(i));
-        phases{slowest_index(i)} = [phases{slowest_index(i)}, zeros(floor(sector_list(slowest_index(i), 2)), 2)];
+        phases{slowest_index(i)} = [phases{slowest_index(i)}, zeros(floor(sector_list(slowest_index(i), 2)), 3)];
     end
 
     complete_corners = slowest_index;
@@ -128,7 +128,7 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
                 exit_phases = 1;
                 for z=length(phases{curr_corner}):-1:1
                     phase_exit_speed = phases{curr_corner}(z, 3);
-                    [long, throttlebrake] = avail_accel(phase_exit_speed, sector_list(curr_corner, 1), gg);
+                    [long, throttlebrake] = avail_accel(phase_exit_speed, sector_list(curr_corner, 1), gg, weight_trans);
                     brake_accel = long(2);
                     time = phase_time(brake_accel, phase_exit_speed, phase_dist);
                     phase_entry_speed = -brake_accel * time + phase_exit_speed;
@@ -137,12 +137,12 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
                     end
                     max_phases_speed = phase_entry_speed;
                     toofast = 0;
-                    temp_accel = zeros(z, 5);
+                    temp_accel = zeros(z, 6);
                     if(max_phases_speed > max_entry_speed && phases{curr_corner}(1, 2) > 0)
                        temp_accel(1, :) = phases{curr_corner}(1, :);
                         for x=1:z
                            phase_entry_speed = temp_accel(x, 2);
-                           long = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg);
+                           [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg, weight_trans);
                            engine_accel = long(1);
                            time = phase_time(engine_accel, phase_entry_speed, phase_dist);
                            phase_exit_speed = engine_accel * time + phase_entry_speed;
@@ -159,20 +159,23 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
                     if(toofast == 1)
                         break
                     end
+                    %[elec_accel, elec_consump] = elec_mot(long, gg, phase_entry_speed, time, -throttlebrake(2), weight_arr);
                     phases{curr_corner}(z, 2) = phase_entry_speed;
                     phases{curr_corner}(z, 4) = -throttlebrake(2);
                     phases{curr_corner}(z, 5) = 0;
+                    phases{curr_corner}(z, 6) = 0;
                     if(z > 1)
                         phases{curr_corner}(z-1, 3) = phase_entry_speed;
                         phases{curr_corner}(z-1, 4) = -throttlebrake(2);
                         phases{curr_corner}(z-1, 5) = 0;
+                        phases{curr_corner}(z-1, 6) = 0;
                     end
                     exit_phases = exit_phases + 1;
                 end
             end
             for z=1:(length(phases{curr_corner})-exit_phases)
                 phase_entry_speed = phases{curr_corner}(z, 2);
-                [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg);
+                [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg, weight_trans);
                 engine_accel = long(1);
                 time = phase_time(engine_accel, phase_entry_speed, phase_dist);
                 phase_exit_speed = engine_accel * time + phase_entry_speed;
@@ -183,25 +186,29 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
                 if(throttlebrake(1) > min_throttle)
                     phases{curr_corner}(z, 4) = throttlebrake(1);
                     phases{curr_corner}(z, 5) = consump(gg, phase_entry_speed, time, throttlebrake(1));
+                    phases{curr_corner}(z, 6) = 0;
                 else
                     phases{curr_corner}(z, 4) = 0;
                     phases{curr_corner}(z, 5) = 0;
+                    phases{curr_corner}(z, 6) = 0;
                 end
                 if(z < length(phases{curr_corner}))
                     phases{curr_corner}(z+1, 2) = phase_exit_speed;
                     if(throttlebrake(1) > min_throttle)
                         phases{curr_corner}(z+1, 4) = throttlebrake(1);
                         phases{curr_corner}(z+1, 5) = consump(gg, phase_entry_speed, time, throttlebrake(1));
+                        phases{curr_corner}(z+1, 6) = 0;
                     else
                         phases{curr_corner}(z+1, 4) = 0;
                         phases{curr_corner}(z+1, 5) = 0;
+                        phases{curr_corner}(z+1, 6) = 0;
                     end
                 end
             end
             
             if(phases{curr_corner}(end, 4) > 0)
                 phase_entry_speed = phases{curr_corner}(end, 2);
-                long = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg);
+                [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(curr_corner, 1), gg, weight_trans);
                 engine_accel = long(1);
                 time = phase_time(engine_accel, phase_entry_speed, phase_dist);
                 phase_exit_speed = engine_accel * time + phase_entry_speed;
@@ -244,7 +251,7 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
                 curr_corners = [curr_corners; i];
                 if(phases{i}(end, 4) > 0)
                     phase_entry_speed = phases{i}(end, 2);
-                    long = avail_accel(phase_entry_speed, sector_list(i, 1), gg);
+                    [long, throttlebrake] = avail_accel(phase_entry_speed, sector_list(i, 1), gg, weight_trans);
                     engine_accel = long(1);
                     time = phase_time(engine_accel, phase_entry_speed, phase_dist);
                     phase_exit_speed = engine_accel * time + phase_entry_speed;
@@ -285,6 +292,7 @@ function [total_time, total_phases, energy, lapajoules, cores, phases] = lap_sim
         end
     end
 
+    
     total_phases = phases{1};
     for i=2:length(phases)
         total_phases = [total_phases; phases{i}];

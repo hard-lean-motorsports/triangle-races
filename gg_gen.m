@@ -1,6 +1,8 @@
-function [gg, max_speed, min_speed] = gg_gen(bike_file)
+function [gg, weight_trans] = gg_gen(bike_file)
     % gg_gen Generates speed dependant GG-diagram
 
+    bike_file = 'bikedef_final_fd_6.4.xlsx';
+    
     warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
     vd_table = readtable(bike_file, "Sheet", "vehicledyn");
     eng_table = readtable(bike_file, "Sheet", "engine");
@@ -14,6 +16,7 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     heating_value = str2double(vd_table{10, 2}{1}) * 1e6 * 1e-3;
     
     %% VD factors
+    weight_trans = {[],[],[],[]};
     W = str2double(vd_table{3, 2}{1});
     accel_interp = 0;
     accel_interp_arr = [];
@@ -37,8 +40,16 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     [left_interp, left_interp_arr, left_val, left_weight_arr] = extract_vd_info(vd_table, 12);
     [right_interp, right_interp_arr, right_val, right_weight_arr] = extract_vd_info(vd_table, 16);
     
-    interp_arr = nan_end_extract(vd_table{2:end, 3});
-
+    interp_arr = nan_end_extract(vd_table{1:end, 3});
+    eng_accel_table = [];
+    
+    if(check_numeric(vd_table{13,2}) == 1)
+        vd_sup_table = readtable(bike_file, "Sheet", "vehicledyn_sup");
+        eng_accel_table = vd_sup_table{:,:};
+    end
+    
+    
+    
     %% Aero factors
     rho = str2double(vd_table{2, 2}{1});
     cd = str2double(vd_table{5, 2}{1});
@@ -94,17 +105,17 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     s_motor = {};
     
     
-    if(f_motor_extant)
-        f_motor = extract_motor(bike_file, "f");
-    end
-    
-    if(s_motor_extant)
-        s_motor = extract_motor(bike_file, "s");
-    end
-    
-    if(r_motor_extant)
-        r_motor = extract_motor(bike_file, "r");
-    end
+%     if(f_motor_extant)
+%         f_motor = extract_motor(bike_file, "f");
+%     end
+%     
+%     if(s_motor_extant)
+%         s_motor = extract_motor(bike_file, "s");
+%     end
+%     
+%     if(r_motor_extant)
+%         r_motor = extract_motor(bike_file, "r");
+%     end
     
     electric_array = {voltage, control_eff, battery_eff, supercap_eff, f_motor_gear, r_motor_gear, s_motor_gear, f_motor, r_motor, s_motor};
     
@@ -112,6 +123,8 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     speed_step = .001;
     min_speed = speed_step; % m/s
     g_steps = 20;
+    
+    
     
     %% Start of generation
     % Everything in here should be meters, kg and newtons.
@@ -126,6 +139,8 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     w_cir = w_rad_total * 2 * pi;
     
     start = 0;
+    
+    vehicle_props = {G, W, f_tyre_dia, r_tyre_dia, s_tyre_dia, gears, eng_accel_table};
     
     while 1
         w_rps = (speed / w_cir);
@@ -145,7 +160,9 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
         max_brake_arr = weight_arr_interp(speed, interp_arr, brake_weight_arr, brake_interp);
         max_left_arr = weight_arr_interp(speed, interp_arr, left_weight_arr, left_interp);
         max_right_arr = weight_arr_interp(speed, interp_arr, right_weight_arr, right_interp);
-        max_eng_accel = (((w_torque * trans_eff) / w_rad_total) - drag)/ W;
+        %max_eng_accel = ((((w_torque + (motor_torque((w_rps_r * r_motor_gear)*60,250,200,14000) * r_motor_gear) + (motor_torque((w_rps_s * s_motor_gear)*60,250,200,14000) * s_motor_gear)) * trans_eff) / w_rad_total) - drag)/ W;
+        max_eng_accel = ((((w_torque) * trans_eff) / w_rad_total) - drag)/ W;
+        max_rear_accel_arr = max_accel_arr;
         
         if(max_eng_accel <=0)
             break
@@ -158,7 +175,20 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
             max_long_accel = accel_val * lift_mult * G;
         end
         
-        max_rear_accel = max_wheel_accel(1, [0, 1, 0], max_accel_arr, max_brake_arr, max_left_arr, max_right_arr) * G;
+        max_long_accel = 1.3 * G;
+        
+        if(~isempty(eng_accel_table))
+            %max_rear_accel = max_wheel_accel(1, [0, 1, 1], max_accel_arr, max_brake_arr, max_left_arr, max_right_arr) * G;
+            %max_rear_accel = 1.3 * G;
+            max_rear_accel = .64 * G;
+        else
+            for i=0:length(eng_accel_table(:,1))
+                if(isequal(eng_accel_table(i,1:3),[0,1,1]))
+                    max_rear_accel = eng_accel_table(i,4);
+                    max_rear_accel_arr = eng_accel_table(i,4:7);
+                end
+            end
+        end
         
         if(max_eng_accel > max_rear_accel)
             max_eng_accel = max_rear_accel;
@@ -187,9 +217,11 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
             max_lat_accel_left = left_val * lift_mult * G;
         end
         
+        
         max_lat_accel_right = 0;
         if(right_interp)
             right_accel_val = lin_interp(interp_arr,right_interp_arr,speed);
+            
             if(right_accel_val < 0)
                 right_accel_val = -right_accel_val;
             end
@@ -278,10 +310,10 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
             end
             
 
-            lat_load_trans = floor((i/G) * 1000)/1000;
-            eng_load_trans = floor((eng_accel/G) * 1000)/1000;
-            brake_load_trans = floor((brake_accel_pure/G) * 1000)/1000;
-            [f_weight_eng, r_weight_eng, s_weight_eng] = load_transfer(lat_load_trans, eng_load_trans, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
+            lat_load_trans = floor((i/G) * 10000)/10000;
+            eng_load_trans = floor((eng_accel/G) * 10000)/10000;
+            brake_load_trans = floor((brake_accel_pure/G) * 10000)/10000;
+            [f_weight_eng, r_weight_eng, s_weight_eng] = load_transfer(lat_load_trans, eng_load_trans, max_rear_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
             [f_weight_brake, r_weight_brake, s_weight_brake] = load_transfer(lat_load_trans, brake_load_trans, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
             this_gg = [this_gg;[i, eng_accel, brake_accel, rpm, gear, avail_eng_accel, ...
                 w_rps_f, w_rps_r, w_rps_f, f_weight_eng, r_weight_eng, ...
@@ -290,12 +322,13 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
                 ]];
         end
         index = round(speed / speed_step);
+        weight_trans(index, :) = {max_accel_arr, max_brake_arr, max_left_arr, max_right_arr};
         gg{index} = this_gg;
 
         speed = speed + speed_step;
     end
     
-    min_speed = 7*speed_step;
+    min_speed = 8*speed_step;
     max_speed = speed-speed_step;
     gg{1} = speed_step;
     gg{2} = torque;
@@ -303,4 +336,5 @@ function [gg, max_speed, min_speed] = gg_gen(bike_file)
     gg{4} = max_speed;
     gg{5} = heating_value;
     gg{6} = electric_array;
+    gg{7} = vehicle_props;
 end

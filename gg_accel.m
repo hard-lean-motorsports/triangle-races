@@ -1,4 +1,4 @@
-function [lat, long, energy, throttlebrake, gg_out] = gg_accel(vel, lat_in, long_in, gg)
+function [lat, long, energy, throttlebrake, gg_out, weight_arr] = gg_accel(vel, lat_in, long_in, gg, weight_trans)
     % gg_accel Returns speed dependant GG-diagram IMPORTANT: accelerations are in m/s^2
     % USAGE: [lat, long, energy, throttle, gg, max_speed_out] = gg_accel(speed, lat_in, long_in, gg, max_speed)
     % Any argument may be "max" or "-max" and a maximum of that argument is returned
@@ -8,6 +8,8 @@ function [lat, long, energy, throttlebrake, gg_out] = gg_accel(vel, lat_in, long
     % (or skipped).
 
     energy = 0;
+    
+    G = gg{7}{1};
     
     if(~exist("gg", "var"))
         [gg] = gg_gen();
@@ -42,6 +44,22 @@ function [lat, long, energy, throttlebrake, gg_out] = gg_accel(vel, lat_in, long
     
     if(low_vel ~= high_vel)
         high_vel_mult = (vel - low_vel) / (high_vel - low_vel);
+    end
+    
+    if(high_vel >= gg{4} && low_vel <= gg{4})
+        high_vel = low_vel;
+        high_vel_mult = .5;
+    elseif(low_vel <= gg{3} && high_vel >= gg{3})
+        low_vel = high_vel;
+        high_vel_mult = .5;
+    elseif(vel < gg{3})
+        error("Velocity " + vel + " too low");
+    elseif(vel > gg{4})
+        error("Velocity " + vel + " too high");
+    end
+    
+    if(high_vel <= 0 || low_vel <= 0)
+        error(high_vel + " or " + low_vel + " is or is below 0");
     end
     
     low_vel_mult = 1 - high_vel_mult;
@@ -177,5 +195,21 @@ function [lat, long, energy, throttlebrake, gg_out] = gg_accel(vel, lat_in, long
             throttlebrake = [long/max_throttle, 0];
         end
     end
+     weight_arr = [];
+%     if(exist('weight_trans', 'var'))
+%     
+%         weight_low = weight_trans(low_vel_index, :);
+%         weight_high = weight_trans(high_vel_index, :);
+% 
+%         max_accel_arr = weight_low{1} * low_vel_mult + weight_high{1} * high_vel_mult;
+%         max_brake_arr = weight_low{2} * low_vel_mult + weight_high{2} * high_vel_mult;
+%         max_left_arr = weight_low{3} * low_vel_mult + weight_high{3} * high_vel_mult;
+%         max_right_arr = weight_low{4} * low_vel_mult + weight_high{4} * high_vel_mult;
+% 
+%         weight_lat = floor(lat*1000/G)/1000;
+%         weight_long = floor(long*1000/G)/1000;
+% 
+%         [F, R, S] = load_transfer(weight_lat, weight_long, max_accel_arr, max_brake_arr, max_left_arr, max_right_arr);
+%         weight_arr = [F, R, S];
+%     end
 end
-

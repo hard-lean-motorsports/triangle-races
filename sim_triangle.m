@@ -10,9 +10,17 @@ if(track_file == 0)
     return
 end
 disp("Waiting for user bike selection");
-h = msgbox("Choose a bike description file(s)");
-uiwait(h);
-bike_file = uigetfile({'*.xlsx', "Bike Description .xlsx files"} ,'MultiSelect','on');
+answer = questdlg('Run existing files or optimise gear ratios?', ...
+	'Opt or run', ...
+	'Run Existing', 'Optimise Gear Ratios','Run Existing');
+bike_file = [];
+if(strcmpi(answer, 'Run Existing'))
+    h = msgbox("Choose a bike description file(s)");
+    uiwait(h);
+    bike_file = uigetfile({'*.xlsx', "Bike Description .xlsx files"} ,'MultiSelect','on');
+else
+    bike_file = opticreate();
+end
 tic;
 async_ids = [];
 if(~iscell(bike_file))
@@ -37,15 +45,16 @@ total_cores = p.NumWorkers;
 if(length(bikes_array) < total_cores)
     total_cores = length(bikes_array);
 end
-results = cell(length(bikes_array), 7);
+results = cell(length(bikes_array), 8);
 for i=1:length(bikes_array)
-    async_result(i) = parfeval(p, @gg_gen, 1, bikes_array{i});
+    async_result(i) = parfeval(p, @gg_gen, 2, bikes_array{i});
 end
 
 for i=1:length(bikes_array)
-    [id, gg] = fetchNext(async_result);
+    [id, gg, weight_trans] = fetchNext(async_result);
     async_ids(id) = i;
     gg_list{id} = gg;
+    weight_trans_list{id} = weight_trans;
 end
 for i=1:length(bikes_array)
     id = async_ids(i);
@@ -58,13 +67,20 @@ disp("gg-graph generation complete");
 disp(newline);
 disp("Generating laptimes");
 for i=1:length(bikes_array)
-    async_result(i) = parfeval(p, @lap_sim, 6, sector_list, gg_list{i});
+    async_result(i) = parfeval(p, @lap_sim, 6, sector_list, gg_list{i}, weight_trans_list{i});
 end
 
 for i=1:length(bikes_array)
-    [id, total_time, total_phases, energy, lapajoules, cores, phases] = fetchNext(async_result);
-    async_ids(id) = i;
-    results(id,:) = {strcat(bikes_array{i}), total_time, total_phases, energy, lapajoules, cores, -1};
+    try
+        [id, total_time, total_phases, energy, lapajoules, cores, phases] = fetchNext(async_result);
+        async_ids(id) = i;
+        results(id,:) = {strcat(bikes_array{id}), total_time, total_phases, energy, lapajoules, cores, -1, gg_list{id}};
+    catch ME
+        disp("Error with " + bikes_array{i})
+        disp(getReport(ME));
+        async_ids(id) = i;
+        results(id,:) = {strcat(bikes_array{id}), inf, [], inf, 0, 0, -1, {}};
+    end
 end
 disp("Laptime generation complete");
 disp(newline);
@@ -80,8 +96,10 @@ end
 if(length(bikes_array) > 1)
     sorted_results = cell(length(bikes_array), 7);
     lapajoule_listing = sort(cell2mat(results(:, 5)), 'descend');
-    for i=1:length(lapajoule_listing)
-        I = find(cell2mat(results(:, 5))==lapajoule_listing(i));
+    lap_listing = sort(cell2mat(results(:, 2)), 'ascend');
+    for i=1:length(lap_listing)
+        %I = find(cell2mat(results(:, 5))==lapajoule_listing(i));
+        I = find(cell2mat(results(:, 2))==lap_listing(i));
         sorted_results(i, :) = results(I, :);
     end
     results = sorted_results;

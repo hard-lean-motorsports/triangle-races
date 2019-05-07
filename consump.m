@@ -3,11 +3,18 @@ function fuel_consumed = consump(gg, vel, time, throttlepos)
     torque = gg{2};
     low_vel = floor(vel/speed_step) * speed_step;
     high_vel = ceil(vel/speed_step) * speed_step;
-   
+
+    
+    
     high_vel_mult = .5;
     
     if(low_vel ~= high_vel)
         high_vel_mult = (vel - low_vel) / (high_vel - low_vel);
+    end
+    
+    if(high_vel > gg{4})
+        high_vel = low_vel;
+        high_vel_mult = .5;
     end
     
     low_vel_mult = 1 - high_vel_mult;
@@ -21,7 +28,11 @@ function fuel_consumed = consump(gg, vel, time, throttlepos)
     bilin_matrix = torque(:,3:end);
     x_arr = torque(:,1);
     y_arr = [1:-.05:.05]';
-    bsfc = bilin_interp(x_arr,y_arr,rpm,throttlepos,bilin_matrix);
+    if(throttlepos > 0.5)
+        bsfc = bilin_interp(x_arr,y_arr,rpm,throttlepos,bilin_matrix);
+    else
+        bsfc = max(max(bilin_matrix));
+    end
     torque = lin_interp(x_arr,torque(:,2),rpm) * throttlepos;
     rads = conv_unit(rpm, "rpm", "rad/s");
     power = (torque * rads) / 1000;
